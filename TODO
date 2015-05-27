@@ -1,0 +1,62 @@
+
+- versao windows (em andamento , Pedro)
+ - voltar a fazer a cross compilacao funcionar
+ - drivers para outros bancos
+ - implementar driver SQLlite na TL e aRT
+ - opcao para compilar sem banco
+ - estudar como ficam opcoes para bancos no configure
+ - outras coisas???? (facilitar,geracao de relatorios html, etc?)
+
+. ver o problema dos temas no banco saudavel, que ao serem criados as vezes
+  nao funciona direito, mas ao tentar criar novamente funciona.
+
+importacao shape colocando 'code' como chave nao importa 
+direito no TV. eh assim mesmo - talvez mostrar uma mensagem
+de erro quando o object_id for um valor real.
+
+esta criando corretamente temas com mais de uma tabelas, mas
+para as tabelas em adicao aa 1a ele some com o ultimo 
+atributo. provavelmente ele esta achando que a tabela tem
+um atributo a menos, por causa do ID comum entre as tabelas, 
+e este esta sendo retornado, mas nao deveria...
+
+================================================================
+
+Postgre:
+1. todas as operações de banco (createDB, dreateLayer etc
+estao ecoando msg na tela, por default seria mehor esconder
+pois algumas sao bem longas como do createDB.
+Veja por exemplo esta aqui:
+
+> th = createTheme(lpolygons, "poligons", vi="view")
+NOTA:  CREATE TABLE / PRIMARY KEY criará índice implícito
+"te_collection_2_pkey" na tabela "te_collection_2"
+NOTA:  CREATE TABLE criará sequência implícita
+"te_collection_2_aux_unique_id_seq" para coluna serial
+"te_collection_2_aux.unique_id"
+NOTA:  CREATE TABLE / PRIMARY KEY criará índice implícito
+"te_collection_2_aux_pkey" na tabela "te_collection_2_aux"
+
+
+. ao adicionar dados para o banco, preencher com valores ausentes os 
+  dados NA. para leitura ja esta funcionando.
+
+. importSpData passando o tipo da tabela, podenso ser estatica
+  ou eventos. os outros tipos nao podem ser armazenados em um 
+  objeto sp.
+
+. getLastID ou getBiggerID (ou alguma coisa do tipo) para retornar o maior ID,
+  no caso se forem utilizados numeros inteiros como ID. <p/Elias>
+
+. fatiamento temporal
+
+. poligonos com buracos nao estao sendo lidos corretamente do banco
+
+. selecao de atributos para criacao de temas
+
+. alguma forma de retornar as os valores resultantes de um fatiamento raster/atributo
+
+. getUniqueTimes(table) (?) para retornar os tempos unicos de uma tabela temporal?
+
+. outros em pataxo:~pedro/leg/calendario-pedro.ics (abrir com o korganizer)
+

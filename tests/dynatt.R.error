@@ -1,0 +1,63 @@
+# Example of using a dynamic attribute table 
+# It also queries the geometriess, reading
+# groups of four from the database.
+
+require(aRT)
+
+a = openConn()
+
+if(any(showDbs(a)=="dynatt")) deleteDb(a, "dynatt", force=T)
+
+db = createDb(a,db="dynatt")
+
+lpoints = createLayer(db, l="points")
+
+# generating a line of 20 points
+quantity = 20
+xc = 1:20
+yc = unlist(lapply(1:20, function(x) 1)) 
+
+xy = cbind(xc,yc)
+xy.sp = SpatialPoints(xy)
+xy.spdf = SpatialPointsDataFrame(xy, data.frame(ID=paste(1:quantity)))
+
+addPoints(lpoints, xy.spdf)
+
+# creates a dynamic attribute table with random attributes
+t = createTable(lpoints, "dynatt", type="dynatt",gen=FALSE)
+t
+
+id=getID(xy.spdf)
+
+month  = round(runif(20, 1, 4), 0)
+month2 = round(runif(20, 5, 9), 0)
+
+itime=unlist(lapply(month, function(x) toDate(y=2005, month=x, day=1)))
+ftime=unlist(lapply(month, function(x) toDate(y=2005, month=x, day=28)))
+
+value= round(runif(20, 1, 100),0)
+
+df = data.frame(id, value, itime, ftime)
+
+createColumn(t, "value", type="i")
+addRows(t, df)
+t
+data = getData(t)
+data[1:5,]
+
+q = openQuerier(lpoints)
+
+par(mfcol=c(5,1), mar=c(.5,.5,.5,.5))
+pdata = getPoints(lpoints)
+
+for(i in 1:5)
+{
+	plot(pdata, pch=21, cex=4)
+	points(getData(q,4), pch=19, cex=4, col="red")
+	box()
+}
+
+theme=createTheme(lpoints, "dynatt")
+
+setVisual(theme, visualPoints(size=7))
+

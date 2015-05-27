@@ -1,0 +1,44 @@
+#  aRT : API R - TerraLib                                                
+#  Copyright (C) 2003-2011  LEG                                          
+#                                                                        
+#  This program is free software; you can redistribute it and/or modify  
+#  it under the terms of the GNU General Public License as published by  
+#  the Free Software Foundation; either version 2 of the License, or     
+#  (at your option) any later version.                                   
+#                                                                        
+#  This program is distributed in the hope that it will be useful,       
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of        
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         
+#  GNU General Public License for more details.                          
+#                                                                        
+#  You should have received a copy of the GNU Lesser General Public      
+#  License along with this library.
+
+#".First.lib" = function(lib, pkg)
+
+.onAttach = function(lib, pkg)
+{
+  pkg.info <- drop(read.dcf(file=system.file("DESCRIPTION",
+                            package="aRT"),
+                            fields=c("Title","Version","Date")))
+
+  architecture = "(32 bits)"
+  if (TRUE) architecture = "(64 bits)"
+
+  packageStartupMessage("------------------------------------------")
+  packageStartupMessage(pkg.info["Title"])
+  packageStartupMessage("http://www.leg.ufpr.br/aRT")
+  packageStartupMessage(paste("TerraLib", .Call("cppTerraLibVersion",PACKAGE="aRT"), architecture, "is now loaded"))
+  packageStartupMessage(paste("aRT ", pkg.info["Version"]," (", pkg.info["Date"], ") is now loaded", sep=""))
+  packageStartupMessage("------------------------------------------")
+}
+
+.onLoad = function(lib, pkg)
+{
+  library.dynam("aRT", package = pkg, lib.loc = lib) 
+
+  .aRTinitSpDefs()
+  invisible( aRTsilent(TRUE) )
+  return(invisible(0))
+}
+

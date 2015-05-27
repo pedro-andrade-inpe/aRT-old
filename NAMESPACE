@@ -1,0 +1,7 @@
+useDynLib(aRT)
+
+import(methods)
+import(sp)
+
+export(summary, addLines, addPermission, addPoints, addPolygons, addRaster, addRows, addShape, aRTinstallreport, aRTsilent, aRTversion, as.aRTgeometry, createAndFillColumn, createColumn, createDb, createGPM, createLayer, createRelation, createTable, createTheme, createView, deleteDb, deleteLayer, deleteTable, deleteTheme, deleteView, dropUser, getBox, getCells, getClip, getData, getDistance, getGeometry, getID, getLines, getMetric, getNN, getOperation, getPermissions, getPixels, getPoints, getPolygons, getProj, getRaster, getRelation, getSetOperation, getVisual, importMif, importShape, importSpData, importTable, nextFrame, openConn, openDb, openLayer, openQuerier, openTable, openTheme, reload, removeDup, setVisible, setVisual, showDbs, showLayers, showTables, showThemes, showViews, simplify, toDate, updateColumns, visualLines, visualPoints, visualPointsSlice, visualPolygons, visualRaster, connectToBiggerIntersectionArea, getNeighborsDistanceFunction, getNeighborsOpenNetworkFunction, createOpenNetwork, getNeighborsMaxDistanceFunction, calculateDistancePoints, addEntryPoints, saveGPM, getNeighborsIntersectionLines, getNeighborsContainedPoints, connectLineToIntersectionPolygons)
+

@@ -1,0 +1,425 @@
+%  aRT : API R - TerraLib                                                
+%  Copyright (C) 2003-2008  LEG                                          
+%                                                                        
+%  This program is free software; you can redistribute it and/or modify  
+%  it under the terms of the GNU General Public License as published by  
+%  the Free Software Foundation; either version 2 of the License, or     
+%  (at your option) any later version.                                   
+%                                                                        
+%  This program is distributed in the hope that it will be useful,       
+%  but WITHOUT ANY WARRANTY; without even the implied warranty of        
+%  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         
+%  GNU General Public License for more details.                          
+%                                                                        
+%  You should have received a copy of the GNU Lesser General Public      
+%  License along with this library.
+
+% \VignetteIndexEntry{Tables and Queries With aRT}
+
+\documentclass{article}
+
+\SweaveOpts{pdf=TRUE,eps=TRUE}
+\usepackage{Sweave}
+\usepackage{hyperref}
+\usepackage{aRT}
+
+\title{Tables and Queries With \aRT}
+\author{Pedro R. Andrade\\
+Paulo Justiniano Ribeiro Jr}
+\date{September 10, 2008}
+
+\begin{document}
+\maketitle
+\tableofcontents
+
+<<echo=FALSE,print=FALSE,label="seed">>= 
+set.seed(708983)
+options(width=77)
+@
+
+\section{Introduction}
+
+In \aRT\ there are seven types of table, implementing the \tl\
+models. They are:
+
+\begin{itemize}
+\item static,
+\item external,
+\item media,
+\item event,
+\item dynatt,
+\item dyngeom, and
+\item alldyn.
+\end{itemize}
+
+These tables are encapsulated in the class \aRTtable, and we can query them
+using \aRTtheme\ and \aRTquerier\ objects. The three classes are discussed
+in this document, and we present here how to execute database queries,
+selecting and joining attributes.
+
+<<echo=TRUE,print=FALSE,label="library">>= 
+library(aRT)
+conn = openConn(name="default")
+if(any(showDbs(conn)=="tabletest")) deleteDb(conn, "tabletest", force=T)
+db = createDb(conn,db="tabletest")
+@
+
+We will create a new layer, populate with some geometries, and, for each
+type of table, we discuss how to populate the table, and
+how to make temporal and attributes queries, using the other \aRT\ classes.
+Note that spatial querier can be done directly using \aRTlayer\ objects.
+
+<<echo=TRUE,print=FALSE,label="spatialPointsDataFrame">>= 
+quantity = 10
+xc = round(runif(quantity),2)
+yc = round(runif(quantity),2)
+
+xy = cbind(xc,yc)
+xy.sp = SpatialPoints(xy)
+xy.spdf = SpatialPointsDataFrame(xy, data.frame(ID=paste(1:quantity)))
+@
+
+<<echo=TRUE,print=FALSE,label="createStaticLayer">>= 
+lstatic = createLayer(db, l="static")
+addPoints(lstatic, xy.spdf)
+@
+
+All non-geometric data in \aRT\ is stored in tables, and the way to
+exchange this type of information with the database is using
+\aRTtable\ objects. \aRTtable\ objects are created and
+opened from \aRTlayer\ objects, using \code{createTable} and
+\code{openTable}, respectively.
+Table data is read from and written to databases using 
+\code{data.frame}. \code{row.names} are not used to represent IDs in
+\aRT, because IDs can be unsuficient to describe temporal data.
+
+\section{Static tables}
+
+The most basic type of table in \aRT\ is \emph{static}. Static tables
+store attributes with no variation in the time, for example the 
+object \code{df} below:
+
+<<echo=TRUE,print=FALSE,label="createDataFrame">>= 
+ID=getID(xy.spdf)
+norm=unlist(lapply(ID, function(x) rnorm(1, 20,10)))
+unif=unlist(lapply(ID, function(x) runif(1, 1,100)))
+
+df = data.frame(ID, norm, unif)
+df
+@
+
+To create a static table in a layer we use \code{createTable()}:
+
+<<echo=TRUE,print=FALSE,label="createTable">>= 
+tstatic = createTable(lstatic, "tstatic")
+tstatic
+@
+
+Note that when we create a table it already has 10 rows with
+the unique IDs from the geometries. To add this data to the table
+we use \code{updateColumns}, and it also create new columns using
+\code{colnames(df)}.
+
+<<echo=TRUE,print=FALSE,label="updateColumns">>= 
+updateColumns(tstatic, df)
+tstatic
+@
+
+And finally, \code{getData} is used for reading the data from the table:
+<<echo=TRUE,print=FALSE,label="updateNewColumns">>= 
+getData(tstatic)
+df2 = data.frame(ID, norm=unlist(lapply(ID, function(x) rnorm(1, 20,10))), uniff=unif)
+updateColumns(tstatic,df2)
+getData(tstatic)
+@
+
+Note that, as \aRT\ automatically have created the rows, the order of the
+rows in the result is not the same of the \code{df}.
+
+To avoid it, we can create an empty 
+table, and populate it manually. First, we need to use \code{gen=FALSE},
+to avoid generate the rows of the table:
+
+<<echo=TRUE,print=FALSE,label="staticTableWithoutGen">>= 
+tstatic2=createTable(lstatic, "tstatic2", gen=FALSE)
+tstatic2
+@
+
+The argument \code{gen} indicates that the function must
+create one row for each spatial object, and fill it with 
+the ID of the spatial object. Now we need to create two
+columns, one of integer type and other of real type, and then we
+add some rows to the table.
+
+<<echo=TRUE,print=FALSE,label="addRowsTwice">>= 
+createColumn(tstatic2, "norm", type = "integer")
+createColumn(tstatic2, "unif", type = "numeric")
+addRows(tstatic2, df[1:5,])
+getData(tstatic2)
+addRows(tstatic2, df[6:10,])
+getData(tstatic2)
+@
+But \code{addRows} only creates new elements in the table, it cannot change
+the old elements. For example
+<<echo=TRUE,print=FALSE,label="addExistentRow">>=
+err= try(addRows(tstatic2, data.frame(ID="1",norm=2.1,unif=0.3)))
+strsplit(err[1]," : ")
+getData(tstatic2)[1:3,]
+@
+
+We can also create columns of string type, and set the maximum size of the
+string, as:
+<<echo=TRUE,print=FALSE,label="createCharColumn>>= 
+createColumn(tstatic2, "charcol", type = "character", length=5)
+tstatic2
+@
+
+\code{updateColumns()} already calculates the type and the size of the data,
+before creating the columns.
+
+\subsection{External tables}
+
+External tables are tables with no geometry associated. Therefore they are
+created directly from the database, and we can not use \code{genID}. We
+create external tables also using \code{createTable}, as in the next
+example:
+
+<<echo=TRUE,print=FALSE,label="createExternalTable">>= 
+texternal=createTable(db, "texternal", ID="myid", length=5)
+texternal
+@
+
+Note that here we define the name of the key and also its length. It can
+be defined when creating tables from layers too. As \code{texternal} is
+an object of class \aRTtable\ we can use the same functions as described
+for tables from layers.
+
+\subsection{Media tables}
+
+Media tables are useful when building databases that will be used 
+in \textsf{TerraView}, or another \tl-based GIS. It associates
+a web page to a double-click in a drawn geometry. This type of
+table can be created using \code{type="media"}:
+
+<<echo=TRUE,print=FALSE,label="createMediaTable">>= 
+mediatable=createTable(lstatic,type="media")
+@
+
+A layer can have one, and only one, media table, and 
+a media table does not have a name.
+Also, each media table has two, and only two, atributes: 
+\code{object\_id}, the link to geometries,
+and \code{media\_name}, a web address.
+
+<<echo=TRUE,print=FALSE,label="printMediaTable">>= 
+mediatable
+@
+
+A media table can be manipulated as all the other tables, but
+new columns can not be created. In the next code we associate
+web pages to each geometry of the layer, and we use
+\code{addRows()} to fill the table.
+
+<<echo=TRUE,print=FALSE,label="addMediaTableRows">>= 
+ID=getID(xy.spdf)
+url="http://www.est.ufpr.br/~pedro/media/media"
+
+name=lapply(ID, function(x) sprintf("%s%s.html",url, x))
+name=unlist(name)
+df = data.frame(object_id=ID, media_name=name)
+addRows(mediatable, df)
+@
+
+To check if it is correct, we can use \code{getData()}:
+<<echo=TRUE,print=FALSE,label="getMediaData">>= 
+getData(mediatable)[1:5,]
+@
+
+<<label="printStaticLayer">>=
+lstatic
+@
+
+\section{Attribute queries}
+We can get all the data of a table using \code{getData()}.
+But some operations are useful, for example selecting 
+values that follows a condition, and it can be an attribute,
+or spatial, or temporal condition. In the case of spatial
+queries, here we only use the result to get spatial/attribute
+queries. If you want to see how spatial queries work, see
+\emph{Spatial Queries}.
+
+To execute database queries, we need to create \aRTtheme\ objects.
+
+
+\subsection{Join tables}
+
+\subsection{Attribute restrictions}
+
+\subsection{Spatial queries}
+
+
+\section{Temporal Tables}
+
+Temporal tables in \aRT\ work as static tables, noting that there are
+three identifiers, instead of only one in static tables. The two others
+are the initial and the final time.
+
+These attributes are srtings, but they follows \tl\ model of dates.
+To convert temporal dates to \aRT\ format we will use \code{toDate()}.
+This function gets as arguments integer variables \code{year = 0},
+\code{month = 1}, \code{day = 1}, \code{hour = 0}, \code{minute = 0} and
+\code{second = 0} and returns a string describing the date. It is a bit
+different from \code{ISOdate}.
+
+<<echo=TRUE,print=FALSE,label="generateDates">>=
+toDate(year=2008,month=8,day=7,hour=6, sec=5)
+ISOdate(year=2008,month=8,day=7,hour=6, sec=5)
+@
+
+\subsection{Event tables}
+
+An event table represents a temporal table which each element has a static 
+geometry and attributes, but it occours in a time interval.
+When we are using an event table, we do not need static tables because
+each event is unique, and therefore we can put all attributes in the same
+table. We will use the same layer to create an event table.
+
+<<echo=TRUE,print=FALSE,label="copyLayer">>= 
+lpoints = lstatic #createLayer(db, l="points")
+@
+
+To create an event table, we need to set \code{type="event"}
+at \code{createTable()}. The default value of this argument is
+\code{"static"} when creating from layers and \code{"external"}
+when creating directly from databases.
+
+<<echo=TRUE,print=FALSE,label="createEventTable">>= 
+tevent=createTable(lpoints, "events", type="event")
+tevent
+@
+
+When an event table is created, it
+already contains three attributes: \code{ID}, \code{itime} and
+\code{ftime}, and they are keys.
+We recommend not to generate IDs (\code{gen=FALSE}), because
+it would also generate \code{itime} and \code{ftime}, and put
+zero in all time values (\code{0000-00-00 00:00:00}).
+
+To fill the event table we will generate a random attribute 
+\code{value} with duration of 59 minutes, all in the same day:
+<<echo=TRUE,print=FALSE,label="temporalDataFrame">>= 
+ID=getID(xy.spdf)
+hours = unlist(lapply(ID, function(x) round(runif(1,0,10),0)))
+
+time=unlist(lapply(hours, function(x) toDate(y=2008, month=3, day=30, hour=x)))
+#ftime=unlist(lapply(hours, function(x) toDate(y=2008, month=3, day=30, hour=x, minute=59)))
+
+value=unlist(lapply(ID, function(x) runif(1, 1,100)))
+
+df = data.frame(ID, value, time)
+df[1:7,]
+@
+
+As the table already has three attributes, we need only to create the 
+column \code{value}, and then we can add the rows:
+<<echo=TRUE,print=FALSE,label="addEventRows">>= 
+createColumn(tevent, "value", type="i")
+addRows(tevent, df)
+tevent
+@
+
+<<echo=TRUE,print=FALSE,label="getEventData">>= 
+getData(tevent)
+@
+
+\subsection{Dynamic attribute tables}
+
+Dynamic attribute tables work with geometries where one or more attributes
+changes with the time. It works such as event tables, with the conceptual
+difference that the identifier may repeat.
+
+<<echo=TRUE,print=FALSE,label="createDynattTable">>= 
+#tdynatt=createTable(lpoints, "dynatt", type="dynatt")
+#tdynatt
+@
+
+\subsection{Dynamic geometry tables}
+(not implemented yet)
+
+\subsection{Fully dynamic tables}
+(not implemented yet)
+
+\section{Temporal queries}
+
+We can get all table data with \code{getData()}, but if it is a temporal
+table, we get it sliced. To do it, we need first to create 
+an \aRTtheme\ object.
+
+<<label="createTheme", echo=TRUE,print=FALSE>>= 
+theme=createTheme(lpoints, "events", table="events")
+theme
+#getData(theme)[1:7,]
+@
+Note that the theme has two tables (\code{"static"} and \code{"events"}),
+and \code{getData()} returns the join of them.
+
+
+\subsection{Joining tables}
+
+
+\subsection{Temporal slicing}
+
+To slice the theme data, we need to create an \aRTquerier, with
+\code{openQuerier()}. This function takes as argument \code{chronon},
+representing the type of slides to be produced. It can be \code{"second"},
+\code{"month"}, \code{"season"}, \code{"year"}, \code{"weekofyear"} and others,
+and the default is \code{"nochronon"}. To exemplify using \aRTquerier, we 
+implement an algorithm to calculate the number of occourences in each hour, 
+and the sums of \code{value}. Therefore we need an \aRTquerier\ sliced by hour.
+
+<<echo=TRUE,print=FALSE,label="openQuerier">>= 
+querier = openQuerier(theme, chronon="hour")
+querier
+@
+
+To get data from the querier there are two functions. \code{nextSlide()}
+loads the next slide, returning the number of elements of it, and 
+\code{getData()} returns one of the elements of the slide, read from the
+database. Both functions do not take any argument.
+
+<<label="slidesSumAlgorithm",echo=TRUE,print=FALSE>>= 
+qtde = summary(querier)$slides
+#$
+#qtde
+#time=occourrences=total.value=NULL
+
+#for(i in 1:qtde)
+#{
+#	value = nextSlide(querier)
+#	if(value != 0){
+#	  occourrences = c(occourrences, value)
+#	  sum = 0
+#	  for(j in 1:value)
+#	  {
+#	      data=getData(querier)
+#	      sum = sum + as.integer(data$data$value)
+#	  }
+#	  time=c(time, data$data$itime)
+#	  total.value = c(total.value, sum)
+#	}
+#}
+#time
+#occourrences
+#total.value
+#data.frame(time, occourrences, total.value)
+@
+
+\section*{References}
+\begin{description}
+\item Chambers, J.M., 1998, Programming with data, a guide to the S language.
+Springer, New York.
+\end{description}
+
+\end{document}
+
+% vim:syntax=tex

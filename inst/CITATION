@@ -1,0 +1,18 @@
+citHeader("To cite the package aRT in publications use:") 
+
+citEntry(
+	entry="inproceedings",
+	title = "Integration of Statistics and Geographic Information Systems: the {R}/{T}erra{L}ib Case",
+	author = personList(as.person("P. R. Andrade"), 
+						as.person("P. J. Ribeiro Jr"),
+						as.person("K. Fook")),
+	booktitle="Proceedings of Geo{I}nfo 2005",
+	year = "2005",
+	pages = "139-151",
+	url = "http://www.leg.ufpr.br/aRT",
+	textVersion =
+         paste("P. R. Andrade, P. J. Ribeiro Jr, K. D. Fook.",
+               "Integration of Statistics and Geographic Information Systems: the R/TerraLib Case.",
+               "Proceedings of GeoInfo 2005, p. 139-151. 2005.")
+)
+

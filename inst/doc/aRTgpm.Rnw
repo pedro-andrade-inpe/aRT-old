@@ -1,0 +1,648 @@
+%  aRT : API R - TerraLib                                                
+%  Copyright (C) 2003-2008  LEG                                          
+%                                                                        
+%  This program is free software; you can redistribute it and/or modify  
+%  it under the terms of the GNU General Public License as published by  
+%  the Free Software Foundation; either version 2 of the License, or     
+%  (at your option) any later version.                                   
+%                                                                        
+%  This program is distributed in the hope that it will be useful,       
+%  but WITHOUT ANY WARRANTY; without even the implied warranty of        
+%  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         
+%  GNU General Public License for more details.                          
+%                                                                        
+%  You should have received a copy of the GNU Lesser General Public      
+%  License along with this library.
+
+% \VignetteIndexEntry{Fill Cells with aRT}
+
+\documentclass{article}
+
+\SweaveOpts{pdf=TRUE,eps=TRUE}
+\usepackage{Sweave}
+\usepackage{hyperref}
+\usepackage{lscape}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{aRT}
+
+\title{Generalized Proximity Matrixes with \aRT}
+\author{Pedro R. Andrade, Raian Vargas Maretto}
+\date{October 17, 2013}
+
+\begin{document}
+\maketitle
+\tableofcontents
+
+<<label="Rsettings",echo=FALSE,results=hide>>=
+options(width=69)
+@
+
+\section{Introduction}
+
+This vignette describes how to create Generalized Proximity Matrixes (GPM) within \aRT.
+GPM is based on the idea that Euclidean spaces are not enough to describe the relations
+that take place within the geographical space. For more information on GPM, see
+\emph{Aguiar et al. (2003); Modeling Spatial
+Relations by Generalized Proximity Matrices. Proceedings of V Brazilian Symposium in
+Geoinformatics (GeoInfo'03)}.
+
+GPM is composed by a set of strategies that try to capture such spatial warp, computing 
+operations over sets of spatial data. Some strategies have been implemented within
+\aRT. In the next sections, we will describe the basic structure of the implementation
+and present some examples of creating proximity matrixes. 
+Before starting, we will read some spatial data.
+
+<<label="Loading package">>=
+require(aRT) 
+con=openConn(name="default")
+@
+
+<<label="Importing data",echo=FALSE,print=FALSE>>=
+db=createDb(con, "gpm", replace=TRUE)
+
+llotes = createLayer(db, "lotes")
+lcomunidades = createLayer(db, "comunidades")
+lrodovias = createLayer(db, "rodovias")
+
+comufn = system.file("shapes/comunidades_UTM.shp", package="aRT")
+rodofn = system.file("shapes/rodovias_UTM.shp", package="aRT")
+lotefn = system.file("shapes/lotes_UTM.shp", package="aRT")
+
+addShape(lcomunidades, tab="comus", file=comufn, ID="objeid_37")
+addShape(lrodovias, tab="rodos", file=rodofn,       ID="objeid_57")
+addShape(llotes, tab="lotes", file=lotefn,       ID="id")
+
+rm(db)
+invisible(gc())
+@
+
+<<label="Opening database">>=
+db=openDb(con, "gpm")
+
+llotes = openLayer(db, "lotes")
+lcomunidades = openLayer(db, "comunidades")
+lrodovias = openLayer(db, "rodovias")
+
+rodovias    = getLines(lrodovias)
+comunidades = getPoints(lcomunidades)
+lotes       = getPolygons(llotes)
+@
+
+The database, shown in Figure~\ref{fig:database}, contains:
+\begin{enumerate}
+\item a set of lines, representing roads;
+\item a set of points, representing the center of communities;
+\item a set of polygons, representing farms.
+\end{enumerate}
+
+\begin{figure}[!h]
+\begin{center}
+<<echo=FALSE,print=FALSE,fig=TRUE>>=
+par(mar=c(.5,.5,.5,.5))
+
+plot(llotes, col="dark green")
+plot(lrodovias, add=T, col="red", lwd=2)
+plot(lcomunidades, pch=22, add=T, bg = "blue", col="blue")
+@
+\end{center}
+\caption{Database that will be used to compute spatial relations.}
+\label{fig:database}
+\end{figure}
+
+From the set of polygons, we create a set of points with
+their centroids and a layer of cells, shown in Figure~\ref{fig:cells}.
+
+<<label="Importing data">>=
+lcells = createLayer(llotes, "cells", 150) ## ORIGINAL IS 150
+cells  = getCells(lcells, slice=3000) # le de 3000 em 3000, fica bem mais rapido
+centroids = getOperation(llotes, operation="centroid")
+@
+
+\begin{figure}[htb]
+\begin{center}
+<<echo=FALSE,print=FALSE,fig=TRUE>>=
+par(mar=c(.5,.5,.5,.5))
+
+plot(llotes, lty=0, col="dark green")
+plot(lcells, add=T)
+plot(centroids, pch=23, bg="yellow",add=T)
+@
+\end{center}
+\caption{Data generated form the layer of polygons.}
+\label{fig:cells}
+\end{figure}
+
+\section{Intersection area}
+The first example of GPM starts with a strategy that uses the intersection area to create relations
+between cells and polygons. A cell is connected to the polygon that has
+the largest intersection area. \code{connectToBiggerIntersectionArea()} can be used to 
+compute this operation. It gets a set of cells and a layer of polygons as arguments 
+and returns a table with two columns: the object id of the polygon with largest
+intersection area and the intersection area itself.
+<<label="GPM cell lotes">>=
+mytable = connectToBiggerIntersectionArea(cells, llotes)
+
+get_property_from_cell = function(id)
+{
+    list(ids=mytable[id,"father"], area = mytable[id,"area"])
+}
+@
+
+After creating the function that generates the neighbors of a given object, the GPM can be created 
+straightforwardly by calling \code{createGPM()}. It takes two arguments: the database
+layer with the dataset and the function that creates the neighborhood. 
+The GPM stores the neighborhoods of all objects, with other atributes according to the adopted strategy, 
+such as the `area,' in this case.
+
+<<label="Silent",echo=FALSE,print=FALSE>>=
+aRTsilent(TRUE)
+@
+
+<<label="GPM cell lotes">>=
+gpmcellsprop = createGPM(lcells, get_property_from_cell)
+as.data.frame(gpmcellsprop[1:2])
+@
+
+<<label="Silent",echo=FALSE,print=FALSE>>=
+aRTsilent(FALSE)
+@
+
+
+This GPM, shown in Figure~\ref{fig:cellfarm}, can be saved as a .gpm, GAL or GWT file by using \code{saveGPM()}, presented 
+in more details in section \ref{saveGPM}. The code below saves it in a .gpm file:
+
+% \footnote{For more information on GAL format, see \url{http://geodacenter.asu.edu/software/documentation}.}
+
+<<label="Save GPM">>=
+saveGPM(gpmcellsprop, "cell-neighborhood.gpm", "cells", "lotes")
+@
+
+\begin{figure}[htb]
+\begin{center}
+<<echo=FALSE,print=FALSE,fig=TRUE>>=
+fat= as.numeric(mytable[,"father"])
+colors_lotes = sample(rainbow(3239))
+real_colors = colors_lotes[fat]
+real_colors[which(is.na(real_colors))]= "white"
+par(mar=c(.5,.5,.5,.5))
+
+plot(cells, col=real_colors)
+plot(lotes, add=T)
+box()
+@
+\end{center}
+\caption{Relations from cells to the polygon with larger intersection area.}
+\label{fig:cellfarm}
+\end{figure}
+
+\section{Euclidean distance \label{EDistance}}
+
+The second strategy uses the centroids to create relations between points
+that are closer than 1000m. To accomplish that, we use \code{getNeighborsMaxDistanceFunction()} to
+generate a function that returns the neighbors within a given distance.
+Finally we use \code{createGPM()} from the layer of polygons to  generate the results shown
+in Figure~\ref{fig:1000}.
+
+<<label="Silent",echo=FALSE,print=FALSE>>=
+aRTsilent(TRUE)
+@
+
+<<label="GPM cell lotes">>=
+get_neighbors_lotes   = getNeighborsMaxDistanceFunction(centroids, 1000)
+gpmdistance  = createGPM(llotes, get_neighbors_lotes)
+@
+
+<<label="Silent",echo=FALSE,print=FALSE>>=
+aRTsilent(FALSE)
+@
+
+\begin{figure}[htb]
+\begin{center}
+<<echo=FALSE,print=FALSE,fig=TRUE>>=
+plot_neighborhood_lines = function(points, neighborhood)
+{
+    id_points = getID(points)
+
+    for(i in 1:length(id_points))
+    {
+        p1 = points@coords[i,]
+
+        neighbors = neighborhood[[id_points[i]]]$ids
+
+        for(j in 1:length(neighbors))
+        {
+            mywhich = which(neighbors[j] == id_points)
+            if(length(mywhich) > 0)
+            {
+                p2 = points@coords[mywhich,]
+                lines(c(p1[1],p2[1]), c(p1[2],p2[2]), lty=2)
+            }
+        }
+    }
+}
+
+colors_lotes = sample(rainbow(length(getID(centroids))))
+par(mar=c(.5,.5,.5,.5))
+
+plot(lotes, col=colors_lotes)
+plot_neighborhood_lines(centroids, gpmdistance)
+plot(centroids, pch=".", cex=3, add=T)
+plot(centroids, pch=".", cex=2, add=T, col=colors_lotes)
+box()
+@
+\end{center}
+\caption{Neighborhoods of centroids within 1000m of radius.}
+\label{fig:1000}
+\end{figure}
+
+\section{Intersection with lines}
+
+The strategy presented in this section computes neighborhoods based on the intersection between
+lines and cells. Each cell is connected with the line segments that intersects it. The function 
+\code{getNeighborsIntersectionLines()} can be used to generate the function that returns the neighbor 
+lines that intersects a given cell. It gets a layer of cells and a layer of lines as arguments
+and returns a function used to effectively create the GPM. Finally, the GPM is effectively created
+by the \code{createGPM()}, which receives as arguments the layer of cells passed as argument in the 
+\code{getNeighborsIntersectionLines()} fuction, and the result returned by it. The code below creates
+a neighborhood between the layer "cells" and the layer "rodovias". 
+
+<<label="Silent",echo=FALSE,print=FALSE>>=
+aRTsilent(TRUE)
+@
+
+<<label="GPM intersection lines">>=
+get_neighbor_lines = getNeighborsIntersectionLines(lcells, lrodovias)
+gpm_intersection_lines = createGPM(lcells, get_neighbor_lines)
+@
+
+<<label="Silent",echo=FALSE,print=FALSE>>=
+aRTsilent(FALSE)
+@
+
+This GPM can be saved in a file (.gpm, .GAL or .GWT) through the \code{saveGPM()} method, presented 
+in section \ref{saveGPM}.
+
+\section{Connecting cells with contained points}
+
+In this section, we present a function that computes neighborhoods between a layer of cells and a layer
+of points based on the "contains" spatial relation. Thus, a cell is connected to the points located inside
+its area. The function \code{getNeighborsContainedPoints} generates the function that returns the neighbor
+points located inside the area of a given cell. It gets a layer of cells and a layer of points as arguments
+and returns a function used to effectively compute the GPM. Finally, the GPM is effectively created by the 
+\code{createGPM()} method, which receives as arguments the layer of cells passed as argument in the 
+\code{getNeighborsContainedPoints()} function, and the result returned by it. The code below creates a 
+neighborhood between the layer "cells" and the layer "comunidades". 
+
+<<label="Silent",echo=FALSE,print=FALSE>>=
+aRTsilent(TRUE)
+@
+
+<<label="GPM contained points">>=
+get_neighbor_points = getNeighborsContainedPoints(lcells, lcomunidades)
+gpm_contained_points = createGPM(lcells, get_neighbor_points)
+@
+
+<<label="Silent",echo=FALSE,print=FALSE>>=
+aRTsilent(FALSE)
+@
+
+This GPM can be saved in a file (.gpm, .GAL or .GWT) through the \code{saveGPM()} method, presented in
+section \ref{saveGPM}.
+
+\section{Connecting lines with intersection polygons}
+
+In this section, we present an strategy to compute neighborhoods between a layer of lines and a layer of 
+polygons, in which each line has as neighbors the polygons intersected by it. The function \code{connectLineToIntersectionPolygons()}
+generates the function that returns the neighbor polygons intersected by a given line. It gets a layer of
+lines and a layer of polygons as arguments and returns a function used to effectively compute the GPM. 
+Finally, the GPM is effectively created by the \code{createGPM()} method, which receives as arguments the 
+layer of lines passed as argument in the \code{connectLineToIntersectionPolygons()} function, and the result 
+returned by it. The code below creates a neighborhood between the layer "rodovias" and the layer "lotes".
+
+<<label="Silent",echo=FALSE,print=FALSE>>=
+aRTsilent(TRUE)
+@
+
+
+<<label="GPM intersection between lines and polygons">>=
+get_neighbor_lines_pols = connectLineToIntersectionPolygons(lrodovias, llotes)
+gpmLinePols = createGPM(lrodovias, get_neighbor_lines_pols)
+@
+
+<<label="Silent",echo=FALSE,print=FALSE>>=
+aRTsilent(FALSE)
+@
+
+
+\section{Networks\label{Networks}}
+
+The last strategy presented in this vignette 
+computes neighborhoods based on the distance through a given network represented
+by a set of lines. The original data has to be very well represented, with the starting and ending
+points of two lines being connected to one another when they share the same position in space.
+In this type of network, it is possible to enter and leave the roads in any position.
+\code{createOpenNetwork()} is then used to generate the network. It takes as arguments
+the destination (reference) points, the lines that will be used to represent the network, and a function that
+computes the distance on the network given the length of the lines and their id. The code below creates a network
+that reduces the distance within the network by one fifth of the Euclidean distance for paved roads and
+by half on the others. The attribute \emph{pavimentada} of the table connected to the layer of lines indicates
+whether the road is paved or not.
+
+<<label="Silent",echo=FALSE,print=FALSE>>=
+aRTsilent(TRUE)
+@
+
+<<label="GPM open network">>=
+data = getData(openTable(lrodovias))
+
+network = createOpenNetwork(comunidades, rodovias, function(d, id) {
+  pos = which(data[,"OBJEID_57"] == id)
+  if(length(pos) == 1 && data[pos, "CD_PAVIMEN"] == "pavimentada")
+        return(d/5)
+  else  
+        return(d/2)
+})
+
+<<label="Open Network function">>=
+get_neighbors_net  = getNeighborsOpenNetworkFunction(centroids, network)
+gpmnetwork   = createGPM(llotes, get_neighbors_net)
+@
+
+<<label="Silent",echo=FALSE,print=FALSE>>=
+aRTsilent(FALSE)
+@
+
+Figure~\ref{fig:network} shows the polygons drawn with the color of the closest point through the network.
+There is a current known limitation in the current version of 
+\code{createOpenNetwork()}, that does not work properly
+when the entry point on the network for a given point is the start or end
+of a line segment.
+
+\begin{figure}[htb]
+\begin{center}
+<<echo=FALSE,print=FALSE,fig=TRUE>>=
+plot_neighborhood_points = function(start_points, end_points, end_points_colors, neighborhood, lines, border)
+{
+    id_end_points       = getID(end_points)
+    length_end_points   = length(id_end_points)
+    length_start_points = length(getID(start_points))
+
+    plot(end_points)
+
+    for(i in 1:length_start_points)
+    {
+        mywhich = which(neighborhood[[i]]$ids == id_end_points)
+        if(length(mywhich) > 0)
+        {
+            col = end_points_colors[mywhich]
+            plot(lotes[i,], col=col, pch=20, add=T)
+        }
+    }
+
+    plot(lines, lwd=2, add=T)
+
+    for(i in 1:length_end_points)
+    {
+        col = end_points_colors[i]
+        id = getID(end_points)[i]
+        plot(end_points[i,], bg=col, pch=21, cex=3,add=T)
+        text(end_points@coords[i,1], end_points@coords[i,2], labels=i)
+    }
+}
+
+colors_comunidades = c("#FF004DFF", "#00FFB2FF", "#CCFF00FF", "#0066FFFF")
+par(mar=c(.5,.5,.5,.5))
+
+plot_neighborhood_points(centroids, comunidades, colors_comunidades, gpmnetwork, rodovias, lotes)
+box()
+@
+\end{center}
+\caption{A non-squared cellular space covering the box of the polygonal set.}
+\label{fig:network}
+\end{figure}
+
+\section{Saving the GPM in files\label{saveGPM}}
+
+Once we have created the GPM through one of the strategies presented above, we can save it in a file, which can be a GPM file (".gpm"),
+a GAL file (".gal" or ".GAL") or a GWT file (".gal" or ".GWT"), through the function \code{saveGPM()}. The arguments of this function are:
+
+\begin{itemize}
+\item \textbf{gpm}: the gpm object to be saved;
+
+\item \textbf{filename}: a string containing the name of the file to be created. The extension is automatically
+recognized. If you wants to save the file in the current directory, the string would contain just the filename, 
+followed by the extension. If you wants to specify the location where the file will be saved, the string would 
+contain the complete path to the file, followed by the filename and extension; 
+
+\item \textbf{layer1}: a string containing the name of the layer of objects for which the GPM was created;
+
+\item \textbf{leyer2}: a string containing the name of the layer where the objects of \textit{layer1} has neighbors.
+This parameter is optional. If it is NULL, it is supposed to be the \textit{layer1}, i. e., the neighborhood is not 
+between two layers, but between objects of the same layer (\textit{layer1});
+
+\item \textbf{key}: a string containing the name of the object attribute used as identifier in the file to be saved. This 
+argument is used only for GAL and GWT extrtensions, and its default value is "object\_id\_", which is the TerraLib unique 
+identifier for the objects of a layer.
+
+\item \textbf{attrib}: a string containing the name of the gpm attribute used as weight. This argument is used only for GWT 
+extension. It defines what attribute of the gpm will be used as weight when saving the GWT file.
+\end{itemize}
+
+The code below saves the GPM \textit{gpmnetwork}, created in section \ref{Networks} in the file "gpmnetwork.gpm", presented
+in Figure \ref{fig:gpmnetwork}.
+
+<<label="Saving gpmnetwork in a GPM file">>=
+saveGPM(gpmnetwork, "gpmnetwork.gpm", "lotes", "comunidades")
+@
+
+\begin{figure}[htb]
+\begin{center}
+\fbox{
+\includegraphics[width=8cm]{./Images/gpmnetwork.png}
+}
+\end{center}
+\caption{Stretch of the file \textit{gpmnetwork.gpm}.}
+\label{fig:gpmnetwork}
+\end{figure}
+
+The structure of the GPM file is presented in Table \ref{GPMFile}. The first line is the header, and the GPM starts in 
+the second line. In the header, we have the following fields:
+
+\begin{itemize}
+\item \textbf{Num\_attributes} is the number of attributes of the relations. In the GPM, each relation can have several 
+attributes, which represent its properties.
+
+\item \textbf{Layer\_1} is the name of the layer for which the GPM was created. 
+
+\item \textbf{Layer\_2} is the name of the layer where the objects of \textit{Layer\_1} has neighbors. If the GPM was
+created between cells of the same layer, then the name of \textit{Layer\_1} is repeated in this field, i. e., 
+\textit{Layer\_2} = \textit{Layer\_1}.
+
+\item \textbf{Attribute\_1, ..., Attribute\_N} are the names of the GPM attributes. 
+\end{itemize}
+
+From the second line until the end of the file, the GPM is represented. The neighborhood of each object is represented 
+in two lines. The first contains:
+
+\begin{itemize}
+\item \textbf{ID\_Object\_N} is the unique  identifier of the N-th object;
+
+\item \textbf{Num\_Neighbors} is the number of neighbors of the N-th object;
+\end{itemize}
+
+and the second contais the neighborhood of the object which ID is in the previous line, represented by the fields below, 
+following the structure presented in Table \ref{GPMFile}:
+
+\begin{itemize}
+\item \textbf{ID\_Neighbor\_M} is the M-th neighbor of the N-th object;
+
+\item \textbf{Attrib\_K\_Neigh\_M} is the value of the k-th attribute of the M-th neighbor;
+\end{itemize}
+
+The structure of the GAL file is presented in Table \ref{GALFile}. It does not store informations about the attributes of
+the GPM, but only if two objects are neighbors or not. Furthermore, it does not support neighborhoods between objects 
+of different layers. The first line of the file, as well as in the GPM file, is the header, and the GPM starts in 
+the second line. In the header, we have the following fields:
+
+\begin{itemize}
+\item \textbf{0} is not describe by the creators of the format (Detailed description can be found in the 
+\href{www.unc.edu/~emch/gisph/geoda093.pdf}{GeoDa User's Guide}). Thus, we save it as 0, and it is not used;
+
+\item \textbf{Num\_elements} is the number of objects of the \textit{Layer}; 
+
+\item \textbf{Layer} is the name of the layer for which the GPM was created;
+
+\item \textbf{Key\_Variable} is the name of the object attribute used as identifier of the objects. The default value is 
+"object\_id\_", which is the unique identifier of the objects in TerraLib.
+\end{itemize}
+
+From the second line until the end of file, the relations are represented. The neighborhood of each object is represented
+in two lines. The first contains:
+
+\begin{itemize}
+\item \textbf{ID\_Object\_N} is the unique identifier of the N-th object;
+
+\item \textbf{Num\_Neighbors} is the number of neighbors of the N-th object;
+\end{itemize}
+
+and the second line contains the unique identifier of the neighbors\\ 
+(ID\_Neighbor\_M) of the N-th object. The code below saves the GPM \textit{gpmdistance}, created in section \ref{EDistance}, 
+in the file "gpmdistance.GAL", presented in Figure \ref{fig:gpmdistGAL}.
+
+<<label="Saving gpmdistance in a GAL file">>=
+saveGPM(gpmdistance, "gpmdistance.GAL", "lotes")
+@
+
+\begin{figure}[htb]
+\begin{center}
+\fbox{
+\includegraphics[width=12cm]{./Images/gpmdistGAL.png}
+}
+\end{center}
+\caption{Stretch of the file \textit{gpmdistance.GAL}.}
+\label{fig:gpmdistGAL}
+\end{figure}
+
+The structure of the GWT file is presented in Table \ref{GWTFile}. It can store one of the attributes of the GPM, 
+which name is passed as parameter to the \code{saveGPM()} function. This format, even as the GAL file, does not 
+support neighborhoods objects of different layers. The header of the GWT format is the same of the GAL one. However, 
+from the second line until the end of file, it represent one connection by line, where it has the following fields:
+
+\begin{itemize}
+\item \textbf{ID\_Object\_N} is the unique identifier of the object N-th object;
+
+\item \textbf{ID\_Neighbor\_M} is the M-th neighbor of the N-th object;
+
+\item \textbf{Weight\_Neighbor\_M} is the weight (attribute value) of the relation between the N-th object and the
+M-th neighbor.
+\end{itemize}
+
+The code below save the gpm \textit{gpmdistance}, created in section \ref{EDistance} in the file "gpmnetwork.GWT", presented
+in Figure \ref{fig:gpmdistGWT}.
+
+<<label="Saving gpmdistance in a GWT file">>=
+saveGPM(gpmdistance, "gpmdistance.GWT", "lotes", attrib="distance")
+@
+
+\begin{figure}[htb]
+\begin{center}
+\fbox{
+\includegraphics[width=7cm]{./Images/gpmdistGWT.png}
+}
+\end{center}
+\caption{Stretch of the file \textit{gpmdistance.GWT}.}
+\label{fig:gpmdistGWT}
+\end{figure}
+
+More informations about the GAL and GWT formats can be found in the \href{www.unc.edu/~emch/gisph/geoda093.pdf}{GeoDa User's Guide} 
+and in the \href{http://www.biomedware.com/files/documentation/spacestat/data/export/Spatial_Weights_Files.htm}{SpaceStat documentation}.
+
+\begin{landscape}
+
+\begin{table}
+\begin{center}
+\begin{tabular}{|c|c|c|c|c|c|c|}
+\hline
+Num\_attributes	&Layer\_1	&Layer\_2	&Attribute\_1	&Attribute\_2	&...	&Attribute\_N\\
+\hline
+ID\_Object\_1	&Num\_Neighbors	&	&	&	&	&	\\
+\hline
+ID\_Neighbor\_1	&Attrib\_1\_Neigh\_1	&Attrib\_2\_Neigh\_1	&...	&Attrib\_N\_Neigh\_1	&ID\_Neighbor\_2	&...	\\
+\hline
+ID\_Object\_2	&...	&	&	&	&	&	\\
+\hline
+...	&	&	&	&	&	&	\\
+\hline
+\end{tabular}
+\caption{Structure of the GPM format}
+\label{GPMFile}
+\end{center}
+\end{table}
+
+\begin{table}
+\begin{center}
+\begin{tabular}{|c|c|c|c|}
+\hline
+0	&Num\_elements	&Layer	&Key\_Variable	\\
+\hline
+ID\_Object\_1	&Num\_Neighbors	&	   &	\\
+\hline
+ID\_Neighbor\_1	&ID\_Neighbor\_2	&...	&ID\_Neighbor\_N\\
+\hline
+...	&	&	&	\\
+\hline
+\end{tabular}
+\caption{Structure of the GAL format}
+\label{GALFile}
+\end{center}
+\end{table}
+
+\begin{table}
+\begin{center}
+\begin{tabular}{|c|c|c|c|}
+\hline
+0	&Num\_elements	&Layer	&Key\_Variable\\
+\hline
+ID\_Object\_1	&ID\_Neighbor\_1	&Weight\_Neighbor\_1	&	\\
+\hline
+ID\_Object\_1	&ID\_Neighbor\_2	&Weight\_Neighbor\_2	&	\\
+\hline
+...	&	&	&	\\
+\hline
+ID\_Object\_1	&ID\_Neighbor\_N	&Weight\_Neighbor\_N	&	\\
+\hline
+ID\_Object\_2	&ID\_Neighbor\_1	&Weight\_Neighbor\_1	&	\\
+\hline
+...	&	&	&	\\
+\hline
+\end{tabular}
+\caption{Structure of the GWT format}
+\label{GWTFile}
+\end{center}
+\end{table}
+
+\end{landscape}
+
+\end{document}
+

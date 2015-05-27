@@ -1,0 +1,349 @@
+\newcommand{\tl}{TerraLib}
+\newcommand{\aRT}{\pkg{aRT}}
+\SweaveOpts{width=5.5,height=5.5,pdf=F}
+
+<<label=Rsettings,echo=FALSE,results=hide>>=
+options(width=39)
+options(SweaveHooks=list(fig=function() par(mar=c(2,2,0.5,0.5),
+mgp=c(2,0.8,0))))
+#options(prompt="R> ")
+@
+
+\title{\pkg{aRT}: \R-\tl\ API}
+\author{by Pedro R. de Andrade Neto, Marcos A. Carrero and
+Paulo J. Ribeiro Junior}
+\maketitle
+In the last few years, \R\ has been becoming a great
+environment for working with spatial data, as
+we can see the existence of more than 30 packages 
+in the new CRAN Task View for Analysis of Spatial Data.
+The initiative of the \pkg{sp} package came to 
+standardize the spatial data format [\cite{pebesma:05}],
+providing facility for exchanging data among packages and 
+also with other programs.
+But functions implementing specialized, non-conventional spatial 
+operations are not common in these packages, and also \R\ 
+has a great difficulty for working with very large datasets.
+
+On the other hand, Geographic Information Systems (GIS) are capable to
+manipulate several complex georeferenced data structures.
+GIS are an example of a multidisciplinary work that comprises
+knowledge in areas such as cartography, databases and software
+engineering. There are some packages integrating \R\ with
+GIS, but all of them implements only functions for reading and 
+writing spatial data in files and/or databases. 
+
+\pkg{aRT} is a package that implements the integration between \R\
+and \tl. \tl\ is a set of C++ classes for support 
+building customized GIS applications [\cite{terralib}].
+The main motivation for the package development is to enable
+the access to geographical databases and also to spatial/temporal operations
+over them.
+\tl\ belongs to a new generation of GIS applications, having both
+spatial data and attributes stored in a database, and it facilitates
+the integration with other applications.
+Some of its objectives useful for \R\ spatial applications are:
+\begin{itemize}
+\item Provide transparent access to various DBMS, for example MySQL, 
+PostgreSQL, PostGIS and Oracle-spatial;
+\item Give high-level support to do spatial operations;
+\item Enable database access without using SQL queries and
+retrieve spatial objects from DBMS in a \emph{proxy} way.
+\end{itemize}
+\tl\ provides its own way to access databases, with strong data model,
+and it has several internal tables to control data and their relations.
+Therefore we cannot use interfaces provided by packages
+such as \pkg{RMySQL} and \pkg{ROracle}.
+
+In this paper we objective to give a brief introduction to some concepts of
+\pkg{aRT}. We import data to a database and 
+show some spatial operations over three geometric types.
+
+\section{Database Connections}
+%=============================
+
+To manipulate \tl\ data, we need to establish a connection to a database.
+But, before it, we need to connect to the DBMS:
+<<label=openConn,echo=TRUE>>=
+library(aRT)
+con=openConn(user="pedro", dbms="mysql")
+con
+@
+\code{con} stores a MySQL connection, and it has all necessary information
+for the DBMS authentication. With it, we can execute some administration
+tasks, such as listing, removing and creating databases. To work with a
+particular database, we need to create it from this connection.
+In this article, we will create a database named \emph{recife} 
+(the capital of Pernambuco state, in Brazil) and store its
+connection in a new object called \code{db}.
+
+<<label=deleteDb,echo=FALSE,results=hide>>=
+if(any(showDbs(con) == "recife")) deleteDb(con, "recife", force=T)
+@
+<<label=createDb,echo=TRUE>>=
+db=createDb(con, "recife")
+db
+@
+
+\section{Importing Data}
+%=======================
+
+The actual version of \aRT\ works with objects stored in a database.
+Also, \aRT\ works basically with IDs in almost all functions that
+manipulate spatial data, representing the objects to be used, or the
+results of an operation. \aRT\ adheres to the \pkg{sp} formalization
+of spatial classes, but, as it needs IDs in all objects, \code{SpatialPointsDataFrame}
+are used instead of \code{SpatialPoints}, with a column called ID.
+We will use the data-sets of Recife, available as data of \pkg{aRT}, and shown in
+Figures~\ref{fig:bairros}~and~\ref{fig:drenagem}.
+
+<<label=data,echo=TRUE>>=
+data(recife.districts)
+data(recife.points)
+data(recife.sewers)
+class(recife.districts)[1]
+class(recife.points)[1]
+class(recife.sewers)[1]
+@
+
+\begin{figure}[htb]
+\begin{center}
+<<echo=FALSE,print=FALSE,fig=TRUE>>=
+geobairros    = recife.districts #getPolygons(lbairros)
+geoarmadilhas = recife.points #getPoints(larmadilhas)
+geodrenagem   = recife.sewers #getLines(ldrenagem)
+
+aRTplot(geobairros, col="red")
+aRTplot(geoarmadilhas, add=T, pch=".")
+@
+\end{center}
+\caption{Recife's districts and some points}
+\label{fig:bairros}
+\end{figure}
+
+\begin{figure}[htb]
+\begin{center}
+<<echo=FALSE,print=FALSE,fig=TRUE>>=
+aRTplot(geobairros, col="gray", bor="white")
+aRTplot(geodrenagem, col="blue", add=T)
+@
+\end{center}
+\caption{Recife's sewerage}
+\label{fig:drenagem}
+\end{figure}
+In order to insert the data, the concept of \emph{layer} is necessary.
+A \emph{layer} is a collection of spatial data with attributes, 
+representing objects with the same characteristics.
+To import the data into layers we use \code{importSpData()}, which
+takes as arguments the database connection, the data and the layer name, and
+it returns an object representing the database layer.
+As we have three different geometries, three layers are necessary:
+<<label=Rsettings,echo=FALSE,results=hide>>=
+options(width=33)
+options(SweaveHooks=list(fig=function() par(mar=c(2,2,0.5,0.5),
+mgp=c(2,0.8,0))))
+#options(prompt="R> ")
+@
+<<label=createLayer,echo=TRUE>>=
+ldistricts = importSpData(db,recife.districts,"districts")
+lpoints = importSpData(db,recife.points,"points")
+lsewers = importSpData(db,recife.sewers,"sewers")
+@
+Now the database has three layers, as we can see in the object \code{db}:
+<<>>=
+db
+@
+<<label=Rsettings,echo=FALSE,results=hide>>=
+options(width=39)
+options(SweaveHooks=list(fig=function() par(mar=c(2,2,0.5,0.5),
+mgp=c(2,0.8,0))))
+#options(prompt="R> ")
+@
+
+\section{Spatial Queries}
+%========================
+
+After importing the data, we can perform spatial queries using the
+created layers. The following examples illustrate some 
+of the currently implemented features.
+
+\subsection{Metrics and Operations}
+%==================================
+
+As a first example, we will calculate the perimeter and area of 
+the city. The area can be obtained with the sum of all 
+districts area, but not the perimeter. To do so, we need to 
+join all the polygons to obtain the whole city polygon, and then 
+calculate its length. \code{getSetOperation()} implements set
+operations (union, intersection, difference and XOR),
+and here we use to calculate the union of all districts:
+<<label=createTable2,echo=TRUE>>=
+city=getSetOperation(ldistricts, "union", id=getID(recife.districts))
+class(city)[1]
+@
+In this code, \code{getID()} returns all the IDs of an object.
+
+\emph{city} is a new geometry and it is not stored in the database.
+To do some operation using this object, again, we need to store it
+in the database. Then we will create a new layer:
+
+<<label=createLayer2,echo=TRUE>>=
+lcity=importSpData(db, city, "city")
+@
+
+Now the result of both questions can be obtained using \code{getMetric()}.
+This function returns measures from the data of the layer.
+Then it can return the area and the
+length of all layer elements, answering our question:
+<<label=getMetric,echo=TRUE>>=
+getMetric(lcity, "area")$area
+#$
+getMetric(lcity, "length")$length
+#$
+@
+
+Another possibility for calculating the area is using 
+the sum of the districts area. The value is almost the same,
+with an error of $0.00002\%$:
+<<label=getMetric2,echo=TRUE>>=
+sum(getMetric(ldistricts, "area")$area)
+#$
+@
+
+\subsection{Relations and More Operations}
+%=========================================
+
+Spatial relations are a very important functionality for building
+neighborhood matrixes. The spatial correlation among objects
+may not be restricted to the touching relation. \code{getRelation()} 
+returns the result of a spatial relation between one ore two layers, 
+given a predicate. For exemplify its capabilities, we will answer some 
+questions about Recife data. The first question is:
+``\emph{Which districts contains the points, and which ones are their touching neighbors?}''
+First we will use the \emph{contain} predicate on the districts, and
+after that we ask for layers \emph{touching} the selected elements:
+<<label=getRelation,echo=TRUE>>=
+rel1=getRelation(ldistricts, "contains", lpoints)
+rel2=getRelation(ldistricts, "touches", id=rel1)
+@
+In the second relation we call the function with just one layer as 
+argument, then \aRT\ will use the same layer twice.
+The results of plotting are in Figure~\ref{fig:vizinhos}.
+
+\begin{figure}[htb]
+\begin{center}
+<<echo=FALSE,print=FALSE,fig=TRUE>>=
+aRTplot(geobairros, col="gray", id=rel2, bor="white")
+aRTplot(geobairros, col="gray",  add=T, bor="white") #lty=0
+aRTplot(geobairros, col="green", id=rel2, add=T)
+aRTplot(geobairros, col="yellow", id=rel1, add=T)
+@
+\end{center}
+\caption{Districts which contain the points and their neighbors by touching}
+\label{fig:vizinhos}
+\end{figure}
+
+The next question is ``\emph{Which districts are within a 2Km radius from the selected ones?}''
+\texttt{getOperation()} can generate a polygon that represents a buffer around a polygon,
+given a radius. Then, we execute the union of all the generated polygons and
+check which ones are within the radius:
+<<label=getRelation,echo=TRUE>>=
+buffer=getOperation(ldistricts,"buffer",dist=2000,id=rel1)
+lbuffer=importSpData(db,buffer,"buffer")
+ubuffer=getSetOperation(lbuffer,"union",id=getID(buffer))
+lbuffer=importSpData(db,ubuffer,"bufferunion")
+rel3=getRelation(ldistricts,"within",lbuffer)
+@
+Figure~\ref{fig:raio} shows the buffer around the districts, and the neighbors within
+the buffer.
+
+\begin{figure}[htb]
+\begin{center}
+<<echo=FALSE,print=FALSE,fig=TRUE>>=
+aRTplot(ubuffer,border="red")
+aRTplot(geobairros, col="gray",  add=T, bor="white")
+aRTplot(geobairros, col="green", id=rel3, add=T)
+aRTplot(geobairros, col="yellow", id=rel1, add=T)
+aRTplot(ubuffer,add=T,border="red")
+@
+\end{center}
+\caption{Neighbors within a 2Km radius}
+\label{fig:raio}
+\end{figure}
+
+Still using the districts which contain the points, the third
+question is: ``\emph{Which districts are within 50m of the sewers that crosses the selected districts}?''
+<<label=getRelation2,echo=TRUE>>=
+rel4=getRelation(lsewers, "crosses", ldistricts, id=rel1)
+buf=getOperation(lsewers,"buffer",dist=50,id=rel4)
+lbuffer=importSpData(db,buf,"buffersewers")
+rel5=getRelation(ldistricts,"intersects",lbuffer)
+@
+Finally we have the result of these operations in Figure~\ref{fig:espacial}.
+
+\begin{figure}[htb]
+\begin{center}
+<<echo=FALSE,print=FALSE,fig=TRUE>>=
+aRTplot(buf,bor="white")
+aRTplot(recife.districts,col="gray",add=T, bor="white")
+aRTplot(recife.districts,id=rel5,col="green",bor="gray",add=T)
+aRTplot(recife.districts,id=rel1,col="yellow",bor="gray",add=T)
+aRTplot(recife.sewers,add=T)
+aRTplot(buf,bor="red",col="red",add=T)
+@
+\end{center}
+\caption{Neighbors by a common sewer}
+\label{fig:espacial}
+\end{figure}
+
+\section{Other Functionalities}
+%==============================
+
+A web site with further information can be found at
+\url{http://www.est.ufpr.br/aRT}. \pkg{aRT} is available
+as Linux source code and also as a Windows cross-compiled binary.
+Some other functionalities already implemented in aRT are:
+\begin{itemize}
+\item execute database queries, selecting attributes and joining tables,
+\item read data in a proxy way, retrieving one (or more) 
+geometries/attributes per time, instead of all them once 
+(useful when working with large datasets),
+\item generate environments to enable the visualization of 
+the database layers by other \tl-based GIS.
+\end{itemize}
+
+\section{The Future}
+%===================
+
+\pkg{aRT} has the aim to integrate \R\ and \tl\ with the purpose to have
+an environment for statistical analysis of spatial data stored in a DBMS,
+with the support of TerraLib spatial/temporal/attributes queries.
+As future work we can cite to implement spatial manipulation and queries 
+using non-database stored data, avoiding the creation of new layers and
+keep \aRT\ up-to-dated with the more recent TerraLib implementations of
+spatial algorithms.
+
+\section{Acknowledgements}
+%=========================
+
+This work was partially funded by SAUDAVEL project, CNPq grant 
+552044/2002-4. It is currently developed as part of the activities
+of the REDE SAUDAVEL, and has been supported by Fapesp, proccess 
+number 04/11012-0, and FPLF, proccess 2005.05.066. Further 
+details are available at \url{http://saudavel.dpi.inpe.br/}. 
+This project has been developed at LEG/DEST/UFPR, 
+with support of TerraLib project developers from DPI/INPE.
+We also want to thank \tl\ developers L\'{u}bia Vinhas,
+Karine Reis and Gilberto Ribeiro for help.
+
+\address{Pedro Ribeiro de Andrade Neto\\
+Marcos Aur\'{e}lio Carrero\\
+Paulo Justiniano Ribeiro Junior\\
+Federal University of Paran\'{a}, Brazil
+}
+
+\email{\{pedro, marcos, paulojus\}@est.ufpr.br}
+
+\bibliography{bibliography}
+
+% vim: syntax=tex

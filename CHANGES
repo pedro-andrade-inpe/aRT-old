@@ -1,0 +1,193 @@
+
+    aRT: R-TerraLib API
+    Copyright (C) 2003-2013  LEG  
+
+
+LABELS:
+  * is a structural change
+  + is a new feature
+  - is a bug fix
+  . is a minor change
+
+VERSION 1.9-2
+  - bug with in addRaster() with generated wrong borders of the raster in the database
+
+VERSION 1.9-1
+  - createAndFillColumn was not working properly with raster data (problem with default and dummy)
+  . createAndFillColumn does not require raster anymore when the target is a raster layer 
+
+VERSION 1.9-0
+  + GPM bugs were fixed
+  . GPM now can use different functions to compute distances between points
+
+VERSIOM 1.8-2
+  . open networks can be weighted by attributes of their lines
+
+VERSION 1.8-1
+  + functions saveGPM, saveGAL, and saveGWT
+  - getRelation returned an error when the result is empty, now it returns NULL
+  + createAndFillColumn can use dummy and default values for raster strategies
+  + now working with terralib 4.2.0
+
+VERSION 1.8-0
+  + now working with terralib 4.0.0
+  + can now work with any database version from 4.4.0 on
+  - getCells now return cells which are not holes
+  + getID(layer)
+  + getPoints/Polygons/Lines/Cells(layer, slice) to read large datasets
+  + GPM implementation now within aRT (under development)
+  + new vignettes for fill cell and GPM
+
+VERSION 1.7-4
+  . now working with terralib 3.6.0
+
+VERSION 1.7-3
+  . now working with terralib 3.5_dev
+  - bug in the functions for importing shapefiles
+  - corrections to work with sp_0.9-66
+
+VERSION 1.7-2
+  . now working with terralib 3.4.0
+  + now working with PostGIS
+  + openConn() now tries to load [default] options in .aRTrc
+    whenever called without arguments.
+  - bug in createColumn within 64 bits
+  - Every column name to be stored in the database
+    will be converted to its lowercase due to Postgre,
+    which only works with lowercases.
+
+VERSION 1.7-1
+  - minor bug in SpatialPoints[DF]
+  + now compiling in Linux 64
+  + NAMESPACE
+  - getClip can return now more than one polygon
+  - aRT is R CMD checked again!
+  * due to the corrections for rcmdchecking, some parameters have 
+    changed their names, therefore THERE IS NO BACK COMPATIBILITY.
+    Fortunately, these parameters are usually called as unamed. For
+    instance, aRT/test scripts did not changed.
+
+VERSION 1.7-0
+  * no more confusion between 'id' and 'ID': old objects and functions
+    that used 'id' now use 'ID' (NO BACK COMPATIBILITY)
+  * aRTplot() was removed. plot does everything and much more.
+  + all scripts and vignettes revised due to these changes
+  - removing conflicts with pkg 'nlme' on getData (now internal calls
+    to this function use aRT::getData)
+  . print(aRTconn) now shows the available databases
+  . addRaster() now accepts a SpatialPixelsDataFrame
+  + a coupple of new informative error messages
+
+VERSION 1.6-4
+  + getPixels now cutting also from polygons
+  + new strategy for filling cellular spaces (weighbra)
+  + inst/CITATION
+  . some corrections in man/*
+
+VERSION 1.6-3 (nomination)
+  . now working with terralib 3.3.0
+  . now working with R 2.9.1
+  - now working correctly with polygons that contain holes
+  - slicing cells and points correctly in setVisual(aRTtheme)
+  + getClip(aRTgeometry) clips polygons/lines given a set of polygons
+  + new argument 'calcal' to getGeometry(aRTgeometry)
+  + getCells(aRTlayer)
+  + aRTinstallreport()
+
+VERSION 1.6-2
+  . now working with terralib 3.2.1
+  . now working with R 2.8.0
+  - now hiding password in print(aRTconn)
+  - getSetOperation(layer, "union") bug fixed
+  - bugs on importSpData (when using points and/or views)
+  + getRelation with more than one operation at once
+
+VERSION 1.6-1
+  * filling cellular spaces according to the cell plugin
+  * reading cellular spaces from databases
+
+VERSION 1.6-0 (trip to Parana)
+  * Now working with R 2.7.2
+  * Now working with Windows again (finally!)
+  - scripts revised
+  - documentation revised
+
+VERSION 1.5-0
+  * Now working with terralib 3.2.0 and R 2.6.2
+  + .aRTrc available for connections
+  - minor bug when creating a new column
+  - minor bug in the error when trying to update the database version
+
+VERSION 1.4-0
+  * Now working with terralib 3.2 RC1 and R 2.5
+  * aRT now needs TerraLib as well as TerraView for compiling
+
+VERSION 1.3-3
+  * addUser() has been removed, and we have implemented three
+    functions for working with permissions
+  + addPermission()
+  + getPermissions()
+  + dropUser()
+
+VERSION 1.3-2
+  + aRT now supports compiling with SQLite
+
+VERSION 1.3-1
+  - problems with temporal tables
+
+VERSION 1.3-0
+  + GPM (Generalized Proximity Matrix) algorithms
+  + new classes 'aRTnetwork' and 'aRTgpm'
+  + one user can load to read and write the view set of another user 
+    when she opens the database openDb(con, "db", views="user")
+  + read cells from the database as SpatialPolygons
+  - getData(theme) wrongly returned only the first element
+
+VERSION 1.2-1
+  + aRT now supports Postgre DBMS version 8.1
+  + vignettes updated
+  + new argument to createDb(): 'delete'
+  + getData(table) returns NA for empty values
+
+VERSION 1.2-0
+  * working with R 2.4-0 and sp 0.9-1 (NO BACK COMPATIBILITY)
+    (@data in SpatialPointsDataFrame is no longer AttributeList)
+  - bug with projection in importSpData()
+
+VERSION 1.1-0
+  + cell algorithms using vectorial data without attributes in
+    createAndFillColumns()
+  + deleteTheme() and deleteView() from a database
+  + openTheme() directly from the database (instead of using a layer)
+
+VERSION 1.0-5
+  + compatibility with g++ 4.1.2
+  + importMif(db,...) to import MID/MIF files
+  + new arguments to addUser(): 'remote', 'host' and 'pass'
+  - bug that generated error at the end of deleteView(), 
+    deleteLayer(), createAndFillCell(), openDb(..., update=T),
+    and probably others
+  + reload(db) to reload the layers and themes informations
+    (when the database is changed outside R)
+
+VERSION 1.0-4
+  + Creating layers of cells from layers of polygons: createLayer()
+  + Strategies for populating static tables of cells: createAndFillColumn()
+  - view now has the same projection of its oldest layer
+    in the older version it was always 'noprojection'
+  + openTable(l) returns the first table (useful when it has only one table)
+
+VERSION 1.0-3
+  * aRT working with TerraLib 3.1.3 (NO back compatibility)
+  + aRTlayer recognizes cells
+
+VERSION 1.0-2
+  * new class 'aRTraster' (keeping back compatibility)
+  + getPixels(): relation between raster and points
+  + TerraLib version in aRTversion()
+  + Some examples updated
+
+VERSION 1.0-1
+  * TerraLib with MySQL 5.0
+  + support to new TerraLib functionality of PROJ.4 strings
+

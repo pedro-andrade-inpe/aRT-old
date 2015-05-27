@@ -1,0 +1,49 @@
+#  aRT : API R - TerraLib                                                
+#  Copyright (C) 2003-2011  LEG                                          
+#                                                                        
+#  This program is free software; you can redistribute it and/or modify  
+#  it under the terms of the GNU General Public License as published by  
+#  the Free Software Foundation; either version 2 of the License, or     
+#  (at your option) any later version.                                   
+#                                                                        
+#  This program is distributed in the hope that it will be useful,       
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of        
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         
+#  GNU General Public License for more details.                          
+#                                                                        
+#  You should have received a copy of the GNU Lesser General Public      
+#  License along with this library.                                      
+
+TERRALIB_DIR = e:/programas/aRT-win/terralib-4.2.0
+R_HOME=e:/R-2.15.1
+CXX=g++
+LIBMYSQL=e:/programas/aRT-win/libmySQL.dll
+
+PKG_CPPFLAGS = -DHAVE_MYSQL \
+  -I$(TERRALIB_DIR)/include/terralib/drivers/MySQL \
+  -I$(TERRALIB_DIR)/include/terralib/drivers/MySQL/include \
+  -I$(TERRALIB_DIR)/include/terralib/kernel \
+  -I$(TERRALIB_DIR)/include/terralib/functions \
+  -I$(TERRALIB_DIR)/include/terralib/application \
+  -I$(TERRALIB_DIR)/include/terralib/stat \
+  -I$(TERRALIB_DIR)/include/appUtils	 \
+  -I$(TERRALIB_DIR)/include/terralib/utils \
+  -I$(TERRALIB_DIR)/terraView \
+  -I$(TERRALIB_DIR)/include/terralib/drivers/shapelib \
+  -I$(TERRALIB_DIR)/include/shapelib \
+  -I$(R_HOME)/include -I$(R_HOME)/include/R_ext \
+  -pipe -O2 -g -DQT_SHARED -DQT_NO_DEBUG
+
+TARGET = aRT.dll
+
+TARGET-DBMS-OBJS = #TeMySQL.o
+
+include Makefile.common 
+
+$(TARGET): $(TARGET-OBJS)
+	$(CXX) -c  $(PKG_CPPFLAGS) -o TeApplicationUtils.o  $(TERRALIB_DIR)/include/appUtils/TeApplicationUtils.cpp
+	$(CXX) -c  $(PKG_CPPFLAGS) -o TeAppTheme.o $(TERRALIB_DIR)/include/appUtils/TeAppTheme.cpp
+	$(CXX) -shared  -o aRT.dll *.o $(R_HOME)/bin/i386/R.dll -L$(TERRALIB_DIR)/bin -lterralib_shp -lterralib -lmysql
+	cp $(TERRALIB_DIR)/bin/*.dll .
+	cp $(LIBMYSQL) .
+

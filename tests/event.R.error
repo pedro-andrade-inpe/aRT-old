@@ -1,0 +1,66 @@
+# exemplo de geração de banco temporal com eventos
+# e consulta utilizando fatiamento temporal
+
+require(aRT)
+
+a = openConn()
+
+if(any(showDbs(a)=="event")) deleteDb(a, "event", force=T)
+
+db = createDb(a,db="event")
+
+lpoints = createLayer(db, l="points")
+
+# gerando alguns pontos aleatoriamente no formato sp e
+# converte para o formato do aRT
+quantity = 20
+xc = round(runif(quantity),2)
+yc = round(runif(quantity),2)
+
+xy = cbind(xc,yc)
+xy.sp = SpatialPoints(xy)
+xy.aRT = SpatialPointsDataFrame(xy, data.frame(ID=paste(1:quantity)))
+
+# adiciona os pontos gerados ao layer
+addPoints(lpoints, xy.aRT)
+
+# cria uma tabela de eventos, para serem inseridos alguns atributos
+# temporais, tambem aleatorios
+t=createTable(lpoints, "events", type="event",gen=FALSE)
+t
+rand = function(from, to)
+{
+	round((to - from)*runif(1) + from, 0)
+}
+
+id=xy.aRT$id
+
+h = unlist(lapply(id, function(x) rand(0,5)))
+
+itime=unlist(lapply(h, function(x) toDate(y=2005, month=3, day=30, hour=x)))
+ftime=unlist(lapply(h, function(x) toDate(y=2005, month=3, day=30, hour=x, minute=59)))
+
+valor=unlist(lapply(id, function(x) rand(1,100)))
+
+df = data.frame(id, valor, itime, ftime)
+df[1:5,]
+
+createColumn(t, "valor", type="i")
+addRows(t, df)
+t
+theme=createTheme(lpoints, "events")
+
+p = createQuerier(theme, ch="hour")
+
+qtde = summary(p)$slides
+qtde
+total=0
+for(i in 1:qtde)
+{
+	valor = nextSlide(p)
+	total = total + valor
+	cat(paste(i, ":",  valor, "\n"))
+	if(valor != 0) getData(p)
+}
+
+cat(paste("total:", total, "\n"))

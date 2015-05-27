@@ -1,0 +1,349 @@
+%  aRT : API R - TerraLib                                                
+%  Copyright (C) 2003-2008  LEG                                          
+%                                                                        
+%  This program is free software; you can redistribute it and/or modify  
+%  it under the terms of the GNU General Public License as published by  
+%  the Free Software Foundation; either version 2 of the License, or     
+%  (at your option) any later version.                                   
+%                                                                        
+%  This program is distributed in the hope that it will be useful,       
+%  but WITHOUT ANY WARRANTY; without even the implied warranty of        
+%  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         
+%  GNU General Public License for more details.                          
+%                                                                        
+%  You should have received a copy of the GNU Lesser General Public      
+%  License along with this library.
+
+% \VignetteIndexEntry{Fill Cells with aRT}
+
+\documentclass{article}
+
+\SweaveOpts{pdf=TRUE,eps=TRUE}
+\usepackage{Sweave}
+\usepackage{hyperref}
+\usepackage{aRT}
+
+\title{Fill Cells with \aRT}
+\author{Pedro R. Andrade}
+\date{April 4, 2011}
+
+\begin{document}
+\maketitle
+\tableofcontents
+
+<<label="Rsettings",echo=FALSE,results=hide>>=
+options(width=69)
+@
+
+\section{Introduction}
+Fill cell functions calculate attribute values for
+tables associated with layers of cells. The goal is to homogenize
+information from different sources in different formats (vector data,
+rasters as well as other cellular layers), aggregating them into a single
+spatial (and possibly temporal) data source. Different operators are available 
+according to the geometrical representation and semantics of the input data.
+
+In the current \tl\ version, cells are rectangular. They may have
+a resolution of, for instance 1m x 1m, 500m x 500m, 100km x 200km, according to
+the application needs. A single cellular layer may be associated to 
+different tables, which can be static (attributes that do not change over time) or dynamic
+(attributes that change over time).
+
+To execute the steps in this tutorial, some spatial data is required:
+<<label="Loading package">>=
+require(aRT)
+con=openConn(name="default")
+@
+<<echo=false,print=false>>=
+db=createDb(con, "rondonia", replace=TRUE)
+lcenso    = createLayer(db, "censo")
+censofilename = system.file("shapes/censopop2000_bd.shp", package="aRT")
+addShape(lcenso,    tab="censo",    file=censofilename, ID="CODIGO")
+tcenso    = createTheme(lcenso)
+
+lroads    = createLayer(db, "roads")
+roadsfilename = system.file("shapes/rondonia_roads_lin.shp", package="aRT")
+addShape(lroads,    tab="roads",    file=roadsfilename, ID="object_id_5")
+troads    = createTheme(lroads)
+
+lpoints = createLayer(db, "urban")
+urbanfilename = system.file("shapes/rondonia_urban_centers_pt.shp", package="aRT")
+addShape(lpoints,    tab="urban",    file=urbanfilename, ID="object_id_2")
+tpoints    = createTheme(lpoints)
+
+rm(db)
+invisible(gc())
+@
+<<label="Loading package">>=
+db=openDb(con, "rondonia")
+lcenso    = openLayer(db, "censo")
+tcenso    = openTheme(db, "censo")
+tcenso
+
+lroads    = openLayer(db, "roads")
+troads    = openTheme(db, "roads")
+troads
+
+lpoints = openLayer(db, "urban")
+tpoints = openTheme(db, "urban")
+tpoints
+@
+
+\begin{figure}[htb]
+\begin{center}
+<<echo=false,print=false,fig=true>>=
+par(mar=c(.5,.5,.5,.5))
+plot(lcenso, col="yellow")
+plot(lroads, col="blue", add=T, lwd=2)
+plot(lpoints, bg="red", pch=22, add=T)
+@
+\end{center}
+\caption{Points, lines, and polygons used in this vignette.}
+\label{fig:cells}
+\end{figure}
+
+\section{Creating layers of cells}
+
+A layer of cells is created from another database layer. There are two 
+strategies to create cells, depending on the type of spatial data of reference.
+The default way of creating cells is from layers of polygons. The code below creates
+the cells shown in Figure~\ref{fig:cells}.
+
+<<label="Creating cells">>=
+lcells = createLayer(lcenso, "cells", rx=4000)
+lcells
+@
+
+\begin{figure}[htb]
+\begin{center}
+<<echo=false,print=false,fig=true>>=
+par(mar=c(.5,.5,.5,.5))
+plot(tcenso, col="red",lwd=2)
+plot(lcells, add=TRUE)
+@
+\end{center}
+\caption{Cells covering the layer of polygons.}
+\label{fig:cells}
+\end{figure}
+
+The default options create squared cells from the polygons. 
+Bounding boxes of the whole set of polygonal geometries can also be used to 
+create the layer of cells, using the argument \code{all}.
+In the next example, we create a layer of non-squared cells by informing
+different resolutions for x and y:
+
+<<label="Creating cells">>=
+lcells2 = createLayer(lcenso, "cellsbox", rx=10000, ry=5000, all=TRUE)
+@
+
+Cells created this way cover the entire area of bounding box covering the reference layer, 
+similarly to a raster with a constant number of cells in each row and column.
+The result is shown in Figure~\ref{fig:cells2}.
+In both cases, a static table with the same name of the layer of cells is created automatically.
+
+\begin{figure}[htb]
+\begin{center}
+<<echo=FALSE,print=FALSE,fig=TRUE>>=
+par(mar=c(.5,.5,.5,.5))
+plot(tcenso, col="red",lwd=2)
+plot(lcells2, add=T)
+@
+\end{center}
+\caption{A layer of non-squared cells covering the bounding box of the polygons.}
+\label{fig:cells2}
+\end{figure}
+
+\section{Fillling cell attributes}
+
+Cell attributes are created directly from the table of the layer of cells. The first step
+to fill cell attributes is to open the table:
+
+<<label="Filling cells">>=
+tcells = openTable(lcells, "cells")
+tcells
+@
+
+To create attributes using TerraLib functionalities, we use \code{createAndFillColumn()}. This function
+may take different arguments depending on the strategy used to fill the cells. 
+The first argument is the table where the result will be stored, the second is the name of the attribute
+to be created, the third is the theme with the data used to compute the attribute, and the other
+depend on the operation. For example,
+if one wants to create an attribute based on the minimum distance from the centroid
+of the cells to a set of points, we can use strategy ``distance''.
+
+<<label="Distance">>=
+# repare aqui que, caso o tema possua apenas pontos, nao eh necessario usar o argumento 'geom'
+createAndFillColumn(tcells, newatt="dpoints", target=tpoints, geometry="point", strategy="distance")
+@
+
+Operations such as distance may be used with any geometric type as parameter.
+However, some operations can be used with only one geometric type. For example, the length of lines covering
+each cell can be created by calling:
+
+<<label="Area">>=
+createAndFillColumn(tcells, "length_roads", target=troads, strategy="length")
+@
+
+The results of these two operations are shown in Figure~\ref{fig:operations1}.
+
+<<label="visualize-operations",print=FALSE,echo=FALSE>>=
+theme = createTheme(lcells, "theme_geometric_operations")
+@
+
+\begin{figure}[htb]
+\begin{center}
+<<echo=FALSE,print=FALSE,fig=TRUE>>=
+d = getData(theme)
+df = d@data
+
+par(mfcol = c(1, 2), mar=c(.5,.5,.5,.5), mgp=c(1.8,.8,0))
+
+plotColoured = function(spatialdata, attribute, slices, colors)
+{
+    df = spatialdata@data
+
+    vcolors=rep(colors[1], dim(df)[1])
+
+    for(i in 1:length(slices))
+    {
+        vcolors[which(df[,attribute] > slices[i])] = colors[i]
+    }
+    plot(spatialdata, col=vcolors)
+    box()
+}
+
+plotColoured(d, "dpoints", c(0, (1:5)*10000), heat.colors(6))
+plot(lpoints, pch=21, add=T)
+
+plotColoured(d, "length_roads", c(0, 0.001, 500, 1000, 2000, 3000, 4000), c("gray", heat.colors(6)[6:1]))
+plot(lroads, add=T, lwd=2)
+@
+\end{center}
+\caption{Results of `distance' and `length' operations.}
+\label{fig:operations1}
+\end{figure}
+
+Some strategies use not only geometries but also attributes related to those geometries.
+To create an attribute that computes the maximum value of a given geometry that
+has some overlap with the cells just call:
+
+<<label="Area">>=
+createAndFillColumn(tcells, "maxrenda", tcenso,   att="RENDIMENTO", strat="maximum")
+@
+
+Table~\ref{tabela:operacoes}, in the end of this vignette, describes each operation available for 
+filling cells directly from \code{createAndFillColumn()}. Most of the strategies are intuitive, 
+but two deserve more attention, ``sumwba'' and ``averagewba,'' which mean ``sum weighted by area'' 
+and ``average weighted by area,'' respectively. The first spreads a given attribute of a set of 
+polygons through the cells. This operation can be used for population data, because it keeps the 
+overall sum of the data  in both sets. The second operation if useful to work with attributes 
+representing averages. The algorithm spreads averages of a set of polygons to the cells, recomputing 
+each average proportionally to the intersection area. The results of these operations are shown in 
+Figure~\ref{fig:filledatts}.
+
+<<label="Area">>=
+createAndFillColumn(tcells, "pessoas",  tcenso,   att="NUMERO_PES", strat="sumwba")
+createAndFillColumn(tcells, "rendacap", tcenso,   att="RENDAPCAPI", strat="averagewba")
+@
+
+<<label="visualize-operations",print=FALSE,echo=FALSE>>=
+theme = createTheme(lcells, "theme_bya")
+@
+
+\begin{figure}[htb]
+\begin{center}
+<<echo=FALSE,print=FALSE,fig=TRUE>>=
+cells = getData(theme)
+polygons = getData(tcenso)
+
+par(mfcol = c(2, 2), mar=c(.5,.5,.5,.5), mgp=c(1.8,.8,0))
+
+plotColoured(polygons, "NUMERO_PES", c(0, 50, 100, 200, 400, 800, 1600, 3200), heat.colors(8))
+plotColoured(cells, "pessoas", c(0, 5, 10, 20, 40, 80, 160, 320), heat.colors(8))
+
+plotColoured(polygons, "RENDAPCAPI", c(0, 50, 100, 200), heat.colors(4))
+plotColoured(cells, "rendacap", c(0, 50, 100, 200), heat.colors(4))
+@
+\end{center}
+\caption{Results of the operations ``sumwba'' (left) and ``averagewba'' (right).}
+\label{fig:filledatts}
+\end{figure}
+
+Finally, to visualize the data it is necessary to create a theme using the table that contains the 
+attributes created. 
+<<label="Area">>=
+theme = createTheme(lcells, "mytheme")
+
+theme
+
+cells = getData(theme)
+#polygons = getData(tcenso)
+#for(i in 1:length(d@polygons))
+#    d@polygons[[i]]@labpt = c(0,0)
+
+#d@data = d@data[,-(1:3)] # removing the attributes of type string
+
+#for(i in 1:dim(d@data)[2]) # normalizing the attributes
+#{
+#    mmax = max(d@data[,i])
+#    d@data[,i] = d@data[,i]/mmax
+#}
+@
+
+The figures plotted in this vignette use \code{plotColoured()}, described and used as follows: 
+<<label="visualize-operations",results=hide>>=
+plotColoured = function(spatialdata, attribute, slices, colors)
+{
+    df = spatialdata@data
+
+    vcolors=rep(colors[1], dim(df)[1])
+
+    for(i in 1:length(slices))
+    {
+        vcolors[which(df[,attribute] > slices[i])] = colors[i]
+    }
+    plot(spatialdata, col=vcolors)
+    box()
+}
+
+plotColoured(cells, "dpoints", c(0, (1:5)*10000), heat.colors(6))
+@
+
+\section{Other operations}
+
+Aditionally, it is possible to create new attributes directly using \code{createColumn()} and
+\code{updateColumns()}, instead of \code{createAndFillColumn()}. This way, you can use all R functionalities 
+to generate attributes according to the objectives of the work. For further information on how to create
+attributes of tables, read the vignette ``Tables and Queries With aRT,'' available within the 
+package.
+
+\begin{table}[htb]
+\begin{center}
+\caption{Different operations available for \code{createAndFillColumn()}.}
+\label{tabela:operacoes}
+\begin{tabular}{lp{9.5cm}}
+\hline
+Operation  & Description\\
+\hline
+area       & Total area of overlay between the cell and a layer of polygons.\\
+average    & Average of an attribute of the objects that have some intersection with the cell, without taking into account their geometric properties. \\
+averagewba & Average weighted by area, based on the proportion of the intersection area. Useful when you want to distribute atributes that represent averages, such as per capita income.\\
+count      & Number of objects that have some overlay with the cell (requires argument geometry).\\
+distance   & Distance to the nearest object of a chosen geometry (requires argument geometry).\\
+length     & Total length of overlay between the cell and a layer of lines.\\
+majority   & More common value in the objects that have some intersection with the cell, without taking into account their geometric properties.\\
+maximum    & Maximum value of an attribute among the objects that have some intersection with the cell, without taking into account their geometric properties.\\
+minimum    & Minimum value of an attribute among the objects that have some intersection with the cell, without taking into account their geometric properties.\\
+percentage & Percentages of each class of a raster data. It creates one attribute for each class of the raster.\\
+presence   & Boolean value pointing out whether some object has an overlay with the cell.\\
+stdev      & Standard deviation of an attribute of the objects that have some intersection with the cell, without taking into account their geometric properties.\\
+sum        & Sum of an attribute of the objects that have some intersection with the cell, without taking into account  their geometric properties.\\
+sumwba     & Sum weighted by area, based on the proportion of the intersection area. Useful when you want to preserve the total amount in both layers, such as population size.\\
+xdistance  & Approximated distance to the nearest object of a chosen geometry (requires arguments geometry and maxerror).\\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\end{document}
+

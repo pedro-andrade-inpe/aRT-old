@@ -1,0 +1,204 @@
+%  aRT : API R - TerraLib                                                
+%  Copyright (C) 2003-2008  LEG                                          
+%                                                                        
+%  This program is free software; you can redistribute it and/or modify  
+%  it under the terms of the GNU General Public License as published by  
+%  the Free Software Foundation; either version 2 of the License, or     
+%  (at your option) any later version.                                   
+%                                                                        
+%  This program is distributed in the hope that it will be useful,       
+%  but WITHOUT ANY WARRANTY; without even the implied warranty of        
+%  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         
+%  GNU General Public License for more details.                          
+%                                                                        
+%  You should have received a copy of the GNU Lesser General Public      
+%  License along with this library.
+
+% \VignetteIndexEntry{Connecting and Managing Databases with aRT}
+
+\documentclass{article}
+
+\SweaveOpts{pdf=TRUE,eps=TRUE}
+\usepackage{Sweave}
+\usepackage{hyperref}
+\usepackage{aRT}
+
+\title{Connecting and Managing Databases with \aRT}
+\author{Pedro R. Andrade\\
+Paulo Justiniano Ribeiro Junior}
+\date{September 19, 2008}
+
+\begin{document}
+\maketitle
+\tableofcontents
+
+<<label="Rsettings",echo=FALSE,results=hide>>=
+options(width=69)
+@
+
+\section{Introduction}
+\aRT\ is an \R\ package for manipulating spatial data using \tl.
+\tl\ manipulates data stored in DataBase Management Systems (DBMS), 
+to which it is necessary to establish connections.
+Connecting to a DBMS is aways the first action when using \aRT. 
+This short document introduces the primary
+class of the package, named \aRTconn. This class implements a virtual 
+connection to a DBMS.
+In the initial examples, we consider the user already has permissions
+in the DBMS. Later, in Section~\ref{addPermission}, we explain how \aRT\ functions
+can change the permissions in the DBMS.
+
+<<label="Loading package">>=   
+require(aRT)
+aRTsilent(FALSE)
+@
+
+\section{Connections}
+After loading the package, it is necessary to establish a DBMS connection.
+The function \code{openConn()} is designed for such task.
+Currently, this function takes four arguments (the defaults values are indicated within parenthesis):
+\code{user} (the current user as given by \$USER), 
+\code{password} (no password), 
+\code{host} (`localhost'), and \code{port} (3306).
+Future versions will include  a fifth argument,
+\code{DBMS}, with options to supported
+BDMS such as ``MySQL'', ``Postgres'', ``PostGIS''.
+
+<<label="Creating a DBMS connection",eval=F>>=
+con = openConn(user="root", host="localhost", pass="")
+con
+@
+
+<<label="Rsettings",echo=FALSE,results=hide>>=
+con = openConn(name="default")
+@
+
+When a connection is successfully stablished, this function returns an object of the class \aRTconn. 
+It is important to notice that the elements in the object \code{con}  cannot be changed. 
+The only possible way to set/change the connection parameters
+is creating another object. calling \code{openConn()} with the new options.
+This happens because its data is stored in an external pointer.
+If the connection cannot be established, the function stops with an error,
+as in the following example:
+<<label="Creating another DBMS connection">>=
+err= try(conn2 <- openConn(user="root", pass="abc321"))
+strsplit(err[1]," : ")
+@
+
+An \aRTconn\ object stores a \emph{virtual} connection to a DBMS, that is, 
+every time a database access is required,
+the object connects with the DBMS, performs the task, 
+and then disconnects.
+\aRTconn\ objects allow for some basic queries and operations in the DBMS.
+The function \code{showDbs()} lists the databases available 
+(the ones which the user has some permission):
+<<label="Showing databases">>=
+showDbs(con)
+@
+
+<<label="Rsettings",echo=FALSE,results=hide>>=
+if(any(showDbs(con) == "intro")) deleteDb(con,"intro",force=T)
+@
+
+New databases can be created with \code{createDb()}:
+<<label="createDb">>=
+dbintro = createDb(con, "intro")
+dbintro
+@
+and existing databases can be opened with \code{openDb()},
+<<label="openDb">>=
+db = openDb(con, "intro")
+db
+@
+
+In these examples, both \code{dbintro} and \code{db} belong to the 
+class \aRTdb, that stores a real connection to a particular database.
+As a consequence, at this point the virtual connection is no longer needed
+and these objects are independent from \code{con}.
+Note that an \aRTdb\ object can turn inconsistent if the database is
+removed from the DBMS, possibly generating a \textit{core dump}. 
+This cannot be avoided because the database can be removed from any other 
+connection to the DBMS, which can be from another
+\aRTconn\ object, directly from MySQL, or by another \tl-based application.
+
+\section{Deleting databases}
+Whenever the user removes the object that stores a database connection, the connection
+is not removed yet. To successfuly remove a database connection, 
+you have to to call the garbage collector using \code{gc()}.
+<<label="rm gc">>=
+rm(db)
+rm(dbintro)
+invisible(gc())
+@
+
+To physically remove a database, the user needs a special permission.
+If you have such permission, it is possible to remove databases using \code{deleteDb()}.
+The argument \code{force=TRUE} can be used to avoid a keyboard confirmation,
+because this a dangerous operation, and cannot be undone.
+<<label="deleteDb">>=
+if(any(showDbs(con) == "intro")) deleteDb(con, "intro", force=TRUE)
+@
+
+\section{Managing users from \aRT}\label{addPermission}
+
+The function \code{addPermission()} provides a way to 
+add users to the DBMS, with corresponding permissions.
+The first step is to start a session with \textit{root} permissions.
+<<eval=F, label="openConn">>=
+con=openConn(u="root")
+@ 
+Using this conection, some types of permissions can be set\footnote{Henceforth,
+the \R\ code will not be executed for security reasons.}:
+\begin{itemize}
+\item  To create an user with access from localhost, 
+without or with password use, respectively:
+<<eval=F, label="addPermission">>=
+addPermission(con, "elias")
+addPermission(con, "elias", pass="password")
+@ 
+\item To create an user with access from a specific host, specified either by
+an IP number or hostname, 
+without or with password use, respectively:
+<<eval=F,label="addPermissionHost">>=
+addPermission(con, "elias", host="est.ufmg.br")
+addPermission(con, "elias", host="est.ufmg.br", pass="senha")
+@ 
+\item Finally, to create an user from any host the password is compulsory:
+<<eval=F, label="addPermissionRemote">>=
+addPermission(con, "elias", remote=TRUE, pass="senha")
+@ 
+\end{itemize}
+
+This function, when called as before, provides \textbf{full access} 
+to all the DBMS databases.
+It is also possible to restrict the permissions to some privileges
+or some specific databases. For instance:
+
+<<eval=F,label="addPermissionPrivilege">>=
+addPermission(con, "elias", db="citrus")
+addPermission(con, "elias", privilege="select", db="saudavel")
+addPermission(con, "elias", privilege="update", db="parana")
+@
+
+In order to see the permissions of the DBMS, use \code{getPermissions}:
+<<label="getPermissions">>=
+getPermissions(con)[1:5,]
+@
+
+Finally, for removing the permissions of a given user, use \code{dropUser}:
+
+<<eval=F,label="dropUser">>=
+dropUser(con, user="elias")                           
+dropUser(con, user="elias", remote=TRUE)              
+dropUser(con, user="elias", host="pataxo.est.ufpr.br")
+@
+
+\begin{thebibliography}{99}
+\bibitem{chambers} Chambers, J.M., 1998, Programming with data, a guide to the S language.
+Springer, New York.
+\bibitem{mysql} MySQL Documentation. \url{http://dev.mysql.com/doc/}. Last access: 08/14/2008
+\end{thebibliography}
+
+\end{document}
+
+% vim:syntax=tex

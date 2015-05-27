@@ -1,0 +1,383 @@
+%  aRT : API R - TerraLib                                                
+%  Copyright (C) 2003-2008  LEG                                          
+%                                                                        
+%  This program is free software; you can redistribute it and/or modify  
+%  it under the terms of the GNU General Public License as published by  
+%  the Free Software Foundation; either version 2 of the License, or     
+%  (at your option) any later version.                                   
+%                                                                        
+%  This program is distributed in the hope that it will be useful,       
+%  but WITHOUT ANY WARRANTY; without even the implied warranty of        
+%  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         
+%  GNU General Public License for more details.                          
+%                                                                        
+%  You should have received a copy of the GNU Lesser General Public      
+%  License along with this library.
+
+% \VignetteIndexEntry{Working with sp and aRT}
+
+\documentclass{article}
+
+\SweaveOpts{pdf=TRUE,eps=TRUE}
+\usepackage{Sweave}
+\usepackage{aRT}
+
+\title{Working with \spp\ and \aRT}
+\author{Pedro R. Andrade\\
+Paulo Justiniano Ribeiro J\'{u}nior}
+\date{July 20, 2009}
+
+\begin{document}
+\maketitle
+\tableofcontents
+
+\section{Introduction}
+\spp\ (Pebesma \& Bivand, 2005) 
+is an important package that defines standards and allows 
+for exchanging information between spatial
+packages in \R. 
+As \aRT\ manipulates all spatial data formats, it was designed to 
+follow \spp\ standards to represent spatial data,
+storing and retrieving data using the \spp\ format.
+Therefore, when working with \aRT\ and spatial data in \R{}
+it is required that objects containing spatial data 
+are converted, whenever necessary, to the \spp\ format.
+For futher details on \spp\ package
+see \texttt{http://r-spatial.sourceforge.net}.
+
+
+On the other hand,  
+\tl\ databases can contain data that cannot be directly converted to
+\spp\ data. For example:
+\begin{enumerate}
+\item \tl\ (and therefore \aRT) requires \code{ID} in \emph{all} spatial data,
+different from \spp, that requires \code{ID} only for lines and polygons.
+\item \tl\ layers have support to multigeometry, meaning that each spatial element
+can have more than one geometry associated. For example, a layer of cities
+can store both contours and centroids.
+\item geometries and attributes are stored in different objects in a \tl\
+database. Geometries are stored directly inside layers, whereas attributes are
+stored in tables inside layers. The reason why tables  
+cannot be in the same object as geometries is because
+\tl\ supports different table formats, for example \textit{static},  \textit{event}, 
+and  \textit{dynamic}.
+\end{enumerate}
+
+This document illustrates how to manipulate spatial data in \aRT, 
+showing how to import to and read from \tl\ databases. 
+The data (and also some sentences!)
+of this document are extracted from Pebesma and Bivand (2005).
+
+%<<echo=TRUE,print=FALSE,label="library">>= 
+%require(aRT)
+%@
+
+We start by loading the package and, for convenience here, 
+setting \aRT\ to the silent mode which hides some information messages issued by \aRT\ functions; followed by establishing a connection to a DBMS. 
+The database to be used in the examples is called ``sp'', which, if exists, 
+is removed from the DBMS and recreated.
+Notice this is a \tl database, i.e., a database created following the \tl\ structure.
+
+<<echo=TRUE,print=FALSE,label="createDb">>= 
+require(aRT)
+aRTsilent(TRUE) # hiding info messages
+con = openConn(name="default")
+if(any(showDbs(con)=="sp")) deleteDb(con, "sp", force=T)
+db = createDb(con, "sp")
+@
+
+Further details on connections to the DBMS are provided by the 
+vignette \textsl{aRTconn}.
+<<echo=FALSE,aval=FALSE,print=FALSE,label="aRTconn">>= 
+vignette("aRTconn", package="aRT")
+@
+
+<<echo=FALSE,print=FALSE,label="seed">>= 
+set.seed(13331)
+# library(lattice)
+@
+
+\section{Spatial points}
+
+\subsection{Points without attributes}
+Our first example illustrates how to handle data with a \textit{points geometry}. 
+For instance, consider a set of 10 points randomly generated 
+on the unit square $[0,1] \times [0,1]$ and stored in a matrix
+\code{xy}. The first step is to use \spp\ 
+to convert into a \code{SpatialPoints} object.
+<<echo=TRUE,print=FALSE,label="spatialPoints">>= 
+xy = matrix(runif(20), nc=2)
+xy.sp = SpatialPoints(xy)
+xy.sp
+@
+However, an \code{SpatialPoints} object cannot be used by \aRT\ functions 
+because it does not have \code{ID} and it is necessary to
+convert to a \code{SpatialPointsDataFrame}.
+
+<<echo=TRUE,print=FALSE,label="spatialPointsDataFrame">>=
+xy.spdf = SpatialPointsDataFrame(xy, data.frame(ID=paste(1:10)))
+@
+
+Note that here you can use both \code{xy} or \code{xy.spdf} as argument to \code{Spatial PointsDataFrame}.
+
+The first step to store this data in a \tl\ database 
+is to create a \emph{layer}. A layer is a container
+that can store any geometric type and also, optionally, other types of objects. 
+A layer can be created in a database using \code{createLayer()} and the function
+call receives as arguments the database object and a
+string defining the name to be set for the layer.
+<<echo=TRUE,label="createLayerPoints">>=
+lpoints = createLayer(db, "points")
+lpoints
+@
+Notice that we have two names, \code{"points"}
+which is the name of the layer in the database, 
+and \code{lpoints}, an \R{} object which can access \code{"points"}.
+Next the function \code{addPoints()} is used to store the points into the layer.
+Notice that after that the layer object acknowledges the points are now
+stored into the database.
+<<echo=TRUE,label="addLayerPoints">>=
+addPoints(lpoints, xy.spdf)
+lpoints
+@
+To conclude storing the points a further step creating adding a table
+to the layer is still necessary
+in order to  ba able to read any data from the layer.
+This is a \tl\ requirement needed even when the spatial data does not have
+any attributes. 
+Geometries with no entry in any table cannot be retrieved
+from the database.
+<<echo=TRUE,label="createTablePoints">>=
+tpoints = createTable(lpoints, "tpoints")
+tpoints
+lpoints
+@
+
+Now the layer has 10 points and one table, and we can retrieve the 
+point coordinates using \code{getPoints()}, which returns an 
+object of class \code{SpatialPointsDataFrame}:
+<<echo=TRUE,label="getLayerPoints">>=
+points = getPoints(lpoints)
+points
+@
+
+Note that the points have a different order from the original data. That is because
+the database stores the IDs as characters, therefore 10 comes before 2.
+
+Figure~\ref{fig:points} 
+illustrates two different ways for
+visualising the point coordinates, on the left by
+plotting the points from an \R{} object with \code{plot(points)}, 
+or  directly from the layer, with \code{plot(lpoints)},
+which does not requires the existence of an \R{} object containing
+the points.
+\begin{figure}[htb]
+\begin{center}
+<<echo=FALSE,print=FALSE,fig=TRUE>>=
+par(mfrow=c(1,2), mar=c(.5,.5,.5,.5), mgp=c(1.8,.8,0))
+plot(points)
+box()
+plot(lpoints)
+box()
+@
+\end{center}
+\caption{Plot of a layer with points}
+\label{fig:points}
+\end{figure}
+
+\subsection{Points with attributes}
+Another possible way of creating a \code{SpatialPointsDataFrame} 
+object is by building it by combining a \code{SpatialPoints} 
+object and a data frame containing associated attributes.
+In the following example we combine the object \code{xy.sp}
+with a data frame \code{df} containg attributes.
+Notice the \code{ID} column is required by any \code{sp} object.
+<<echo=TRUE,label="addPointsDataFrame">>=
+df = data.frame(z1 = round(5 + rnorm(10), 2), z2 = 0:9, ID = paste(1:10))
+xy.spdf = SpatialPointsDataFrame(xy.sp, df)
+xy.spdf
+@
+As before we create a layer and aad the points to it. Next, 
+as our object now has attributes, we can import the table data
+using \code{importTable()}.
+<<echo=TRUE,print=FALSE,label="importPointsTable">>=
+lpointsdf = createLayer(db, "lpointsdf")
+addPoints(lpointsdf, xy.spdf)
+tpointsdf = importTable(lpointsdf, "tpointsdf", ID="ID", xy.spdf)
+tpointsdf
+lpointsdf
+@
+
+When retrieving data from the database to \R{} 
+getting point coordinates and the table at once from the layer 
+we can use a second argument of \code{getPoints()} with the table to be read.
+<<echo=TRUE,print=FALSE,label="getPointsDataFrame">>=
+getPoints(lpointsdf, tpointsdf)
+@
+
+\subsection{Doing all at once}
+
+All the steps above can be encapsulated using
+\code{importSpData()}.
+
+\section{Grids}
+(not supported yet)
+
+\section{Lines}
+
+\subsection{Building line objects from scratch}
+In many instances, line coordinates will be retrieved from external
+sources. The following example shows how to build an object of class
+{\tt SpatialLines} from scratch. As objects from this class already stores
+\code{ID}, they are pushed in the layer directly using \code{addLines()}.
+
+<<fig=FALSE,label="spatialLines">>=
+l1 = cbind(c(1,2,3),c(3,2,2))
+l1a = cbind(l1[,1]+.05,l1[,2]+.05)
+l2 = cbind(c(1,2,3),c(1,1.5,1))
+Sl1 = Line(l1)
+Sl1a = Line(l1a)
+Sl2 = Line(l2)
+#S1 = Lines(list(Sl1, Sl1a), ID="a")
+S1 = Lines(list(Sl1), ID="a")
+S2 = Lines(list(Sl2), ID="b")
+S3 = Lines(list(Sl1a), ID="c")
+Sl = SpatialLines(list(S1,S2,S3))
+
+llines = createLayer(db,"llines")
+
+addLines(llines, Sl)
+
+createTable(llines, "llines")
+@
+
+\begin{figure}[htb]
+\begin{center}
+<<echo=FALSE,print=FALSE,fig=TRUE>>=
+par(mfrow=c(1,2), mar=c(.5,.5,.5,.5), mgp=c(1.8,.8,0))
+plot(Sl)
+box()
+plot(llines)
+box()
+@
+\end{center}
+\caption{Plot of a layer with lines}
+\label{fig:points}
+\end{figure}
+
+
+\subsection{Building line objects with attributes}
+
+The same as polygons
+
+\section{Polygons}
+<<echo=FALSE,print=FALSE,label="seedAgain">>= 
+set.seed(25)
+@
+\subsection{Building from scratch}
+The following example shows how a set of polygons are built from scratch.
+Note that {\tt Sr4} has the opposite direction (right) as the other three;
+it is meant to represent a hole in the {\tt Sr3} polygon.
+<<fig=FALSE,label="spatialPolygons">>=
+
+#genPol = function(quant)
+#{
+#    res = list()
+#    res = lapply(1:quant, function(x) {
+#        from = round(runif(2,1,20),2)
+#        to   = from + round(runif(2,1,5),2)
+#
+#        Sr1 = Polygon(cbind(c(from[1],from[1],to[1],to[1],  from[1]),
+#                          c(from[2],to[2],  to[2],from[2],from[2])))
+#        Srs1 = Polygons(list(Sr1),paste(x))
+#    })
+#    SR = SpatialPolygons(res, 1:quant)
+#}
+
+Sr1 = Polygon(cbind(c(2,4,4,1,2),c(2,3,5,4,2)))
+Sr2 = Polygon(cbind(c(5,4,2,5),c(2,3,2,2)))
+Sr3 = Polygon(cbind(c(4,4,5,10,4),c(5,3,2,5,5)))
+Sr4 = Polygon(cbind(c(5,6,6,5,5),c(4,4,3,3,4)), hole = TRUE)
+
+Srs1 = Polygons(list(Sr1), "s1")
+Srs2 = Polygons(list(Sr2), "s2")
+Srs3 = Polygons(list(Sr3, Sr4), "s3/4")
+SR = SpatialPolygons(list(Srs1,Srs2,Srs3), 1:3)
+
+lrings = createLayer(db, "lrings")
+
+addPolygons(lrings, SR)
+
+trings = createTable(lrings, "trings")
+
+#th=createTheme(lrings, "trings")
+lrings
+
+#sr = as.SpatialPolygon(getGeometry(lrings))
+
+pols = getPolygons(lrings)
+@
+
+\begin{figure}
+\begin{center}
+<<echo=FALSE,print=FALSE,fig=TRUE>>=
+par(mfrow=c(1,2), mar=c(.5,.5,.5,.5), mgp=c(1.8,.8,0))
+plot(SR, col=1:3, pbg="white")
+box()
+plot(pols, col=1:3,pbg="white")
+box()
+@
+\end{center}
+\caption{plot of a layer with polygons}
+\label{fig:polygons}
+\end{figure}
+
+\subsection{Polygons with attributes}
+Polygons with attributes, objects of class {\tt SpatialPolygonsDataFrame},
+are built from the {\tt SpatialPolygons} object (topology) and the attributes
+(data.frame):
+<<echo=TRUE,print=FALSE,label="addPolygonsDataFrame">>=
+#attr = data.frame(a=1:3, b=3:1, row.names=c("s1","s2","s3/4"))
+#SrDf = SpatialPolygonsDataFrame(SR, attr)
+#lringsdf = createLayer(db, "lringsdf")
+#addPolygons(lringsdf, SrDf)
+@
+
+To import the attributes, we need to create a table, but, due to the internal
+differences of \spp\ data storage
+<<fig=FALSE,label="polygonsDataFrameAtData">>=
+#xy.spdf@data
+#SrDf@data
+#class(SrDf@data)
+@
+we need to insert \code{SrDf} manually, creating both table and 
+the two integer columns before inserting the data:
+<<fig=FALSE,label="as.Spatial">>=
+#tringsdf = createTable(lringsdf, "tringsdf", ID="ID", gen=F)
+#createColumn(tringsdf, "a", "i")
+#createColumn(tringsdf, "b", "i")
+#addRows(tringsdf, SrDf@data)
+#tringsdf
+#lringsdf
+
+#getData(tringsdf)
+
+#sr = as.SpatialPolygons(getGeometry(lringsdf))
+#summary(sr)
+#sr = as.SpatialPolygonsDataFrame(getGeometry(lringsdf))
+#sr
+@
+
+\section*{References}
+\begin{description}
+\item Chambers, J.M., 1998, Programming with data, a guide to the S language.
+Springer, New York.
+
+\item Pebesma, E.J.  and Bivand, R.S., 2005, Classes and methods for spatial data in R, 
+R-News 5 (2), pp. 9-13.
+
+\end{description}
+
+\end{document}
+
+% vim:syntax=tex

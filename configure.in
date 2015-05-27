@@ -1,0 +1,75 @@
+#  aRT: R-TerraLib API
+#  Copyright (C) 2003-2011  LEG                                          
+#                                                                        
+#  This program is free software; you can redistribute it and/or modify  
+#  it under the terms of the GNU General Public License as published by  
+#  the Free Software Foundation; either version 2 of the License, or     
+#  (at your option) any later version.                                   
+#                                                                        
+#  This program is distributed in the hope that it will be useful,       
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of        
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         
+#  GNU General Public License for more details.                          
+#                                                                        
+#  You should have received a copy of the GNU Lesser General Public      
+#  License along with this library.
+
+AC_INIT(aRT, 1.8-0, pedro.andrade@inpe.br)
+
+AC_PROG_CC
+AC_PROG_CPP
+
+AC_ARG_WITH(terralib,
+            [--with-terralib=TERRALIB_DIR    specifies an existing TerraLib dir],
+			TERRALIB_DIR="${with_terralib}")
+
+
+ART_LOG=` date`
+ART_LOG="Installation date: \t${ART_LOG}\n"
+X_Y=`whoami`
+ART_LOG="${ART_LOG}Installation user: \t${X_Y}\n"
+
+FOUND_TL="yes"
+
+# if not defined TERRALIB_DIR, search in /usr/local
+#if test -z ${TERRALIB_DIR} ; then
+#	candidate="/usr/local"
+#else
+#	candidate="${TERRALIB_DIR}"
+#fi
+#
+#for file in libterralib.so libterralib_shp.so
+#do
+#	AC_CHECK_FILE("${candidate}/lib/${file}", , FOUND_TL="no")
+#	if test "${FOUND_TL}" = "no"; then
+#		echo "::${candidate}/lib/${file} not found. Try download and compile terraLib first."
+#		exit 1
+#	fi
+#done
+TERRALIB_DIR="/usr/local" #${candidate}"
+ART_LOG="${ART_LOG}TerraLib dir:    \t${candidate}\n"
+
+PKG_LIBS=""
+
+TARGET_DBMS_OBJS=""
+HAVE_64_BITS=FALSE
+
+UN=`uname -m`
+if test "${UN}" = "x86_64"; then
+	echo "::system is a 64 bits architecture"
+	HAVE_64_BITS=TRUE
+else
+	echo "::system is a 32 bits architecture"
+fi
+
+AC_SUBST(ART_LOG)
+AC_SUBST(PKG_LIBS)
+AC_SUBST(TERRALIB_DIR)
+AC_SUBST(TARGET_DBMS_OBJS)
+AC_SUBST(HAVE_MYSQL)
+AC_SUBST(HAVE_POSTGRE)
+AC_SUBST(HAVE_SQLITE)
+AC_SUBST(HAVE_64_BITS)
+
+AC_OUTPUT(R/aRTconn.R R/aRTtable.R R/zzz.R src/Makefile src/Makevars)
+

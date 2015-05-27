@@ -1,0 +1,13 @@
+Package: aRT
+Version: 1.9-2
+Date: 2014-02-18
+Title: R-TERRALIB API
+Author: Pedro Ribeiro de Andrade, Marcos Aurelio Carrero, Eduardo Sant'Ana da Silva, Paulo Justiniano Ribeiro Jr
+Maintainer: Pedro Ribeiro de Andrade <pedro.andrade@inpe.br>
+Depends: R (>= 3.0.0), sp (>= 1.0-13), methods, graphics
+Suggests: geoR, spdep, splancs
+Description: Integration between R and geoprocessing API TerraLib
+SystemRequirements: TerraLib (>=4.2.0)
+License: GPL (>= 2)
+URL: http://www.leg.ufpr.br/aRT
+Packaged: 2014-02-21 20:50:21 UTC; pedro

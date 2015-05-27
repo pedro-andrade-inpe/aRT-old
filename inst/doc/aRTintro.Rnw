@@ -1,0 +1,298 @@
+%  aRT : API R - TerraLib                                                
+%  Copyright (C) 2003-2008  LEG                                          
+%                                                                        
+%  This program is free software; you can redistribute it and/or modify  
+%  it under the terms of the GNU General Public License as published by  
+%  the Free Software Foundation; either version 2 of the License, or     
+%  (at your option) any later version.                                   
+%                                                                        
+%  This program is distributed in the hope that it will be useful,       
+%  but WITHOUT ANY WARRANTY; without even the implied warranty of        
+%  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         
+%  GNU General Public License for more details.                          
+%                                                                        
+%  You should have received a copy of the GNU Lesser General Public      
+%  License along with this library.
+
+% \VignetteIndexEntry{aRT: R-TerraLib API}
+
+\documentclass{article}
+
+\SweaveOpts{pdf=TRUE,eps=TRUE}
+\usepackage{Sweave}
+\usepackage{hyperref}
+\usepackage{aRT}
+
+\title{\aRT: \R-\tl\ API}
+\author{Pedro R. Andrade\\
+Marcos A. Carrero\\
+Paulo J. Ribeiro Jr}
+\date{July 20, 2009}
+
+\begin{document}
+\maketitle
+\tableofcontents
+
+\section{Introduction}
+
+\R{} is a language and environment for statistical computing and
+graphics and is freely distributed under the terms of the GNU General Public License
+\cite{R:2003}.
+It is similar to the \code{S} language as originally 
+developed at AT\&T Bell Laboratories,
+although having important differences in the design.
+
+\R{} provides a wide variety of statistical and graphical techniques, 
+is highly extensible
+having interface with procedures written in C/C++ or FORTRAN. A web site
+with further information can be found at \url{http://www.r-project.org}.
+
+\Te\ is a Geographic Information System (GIS) library written in C++,
+developed at Brazil's National Institute for Space Research (INPE), 
+available from the Internet as an open source project, 
+allowing for a collaborative environment for the development of
+multiple and flexible GIS tools \cite{Camara}.
+\Te\ defines geographical and temporal 
+data models and provides support for 
+this model over a range of Data-Base Management Systems (DBMS). 
+A web page with further information on \Te\ is  available
+at \url{http://www.terralib.org}.
+
+An example of application that use \Te\ library of classes
+is \TV. This is a Geographical Application tool, with spatial analysis
+capabilities, and is also licensed as free software under the GNU General Public License.
+It can be downloaded together with \Te.
+
+\aRT\ (API R-TerraLib) is an \R{} package that provides the integration between the
+softwares \R\ and \Te. 
+The idea is to have a package that uses the
+statistical analysis provided by \R{} and the geographical data model and database support
+by \Te. A web site with further information can be found at
+\url{http://leg.est.ufpr.br/aRT}
+
+The main motivation for the package development is to facilitate the exchanging of
+information between the spatial packages in \R{}
+and the DBMS using \Te{} ability to manage and
+perform some spatial operations on the database. 
+For instance, data can be easily moved
+between \R{} and \Te{}, and routines in \Te\ can be used to proccess data, making functionalities in \Te\ available to the \R{} packages. 
+This way a data analyst could, for instance, import the data to
+\R{}, perform some analysis using a spatial package such as \pkg{spdep}, \pkg{splancs},
+\pkg{gstat}, \pkg{geoR}, among others, and return the results to the database. 
+The results persisted in the database 
+could them be accessed by a GIS software such as \TV. 
+
+\aRT\ is being developed under a \code{GNU/Linux-Debian} platform  
+and although source code is distributed, 
+there is no guarantee it will work in other one.
+There are tentatives to mantain a compiled Windows version in the \aRT\ web age.
+The instructions about how to compile and install \aRT\ are available at
+\url{leg.est.ufpr.br/aRT}.
+
+\section{Getting started}
+
+After installing \aRT\ and starting an \R\ session, load the package with the command
+\code{library()}. If the package is loaded successfully a message 
+\code{TRUE} will be displayed.
+
+<<label="Loading package">>=   
+library(aRT)
+@
+
+\aRT\ has four main classes to manipulate TerraLib data/functions:
+\aRTconn, \aRTdb, \aRTlayer\ and \aRTtheme.
+The next subsections explain each class in details.
+As this is an introductory vignette, we will enable the \aRT\ functions message dump,
+calling \code{aRTsilent}:
+
+<<label="Loading package">>=
+aRTsilent(FALSE)
+@
+
+%PEDRO, ME PARECE QUE O SEGUINTE PRECIUSA SER REVISADO MENCIONANDO TB aRTVisual,
+%queriurer ..., certo???
+%% tambem tem o aRTtable, aRTgeometry, aRTquerier... tem que ver se eh melhor
+%% escrever um pouco de tudo aqui, ou se eh melhor deixar estas classes para outros
+%% vignettes. de qualquer forma eu mudei de 'four classes' para 'four main classes'.
+
+
+\subsection{\aRTconn\ class}
+Once the package is loaded, we need a DBMS connection. It is encapsulated in an onbect of
+class \aRTconn. The constructor of \aRTconn\ gets as arguments
+\code{user}, \code{password}, \code{host}, \code{dbms} and \code{port}, and their default values
+are USER variable, empty string, empty string again, the first DBMS found by the configure, and 
+the default port for that DBMS, respectivaly. For example:
+
+<<label="Creating a DBMS connection">>=
+con <- openConn(name="default")
+con
+@
+
+After creating \code{con}, the variables it contains cannot be 
+changed. If you need to set them, the only way is to create the object again.
+It happens because \aRT\ uses external pointers to store the objects, but 
+we will not explain how it works here.
+
+One \aRTconn\ object stores a \emph{virtual} connection, i.e., all time that
+a database access is required, it connects, does something, and then disconnects.
+The objective of this class is to provide some database administration tasks, and
+open \emph{real} connections. For example, if it is the first time you are
+using \aRT, perhaps you will need to give permissions to some users. To do so,
+use \code{addPermission()}:
+
+<<label="Adding user">>=
+addPermission(con, "pedro")
+@
+
+\emph{Warning}: this function gives ALL permissions in ALL databases 
+to a user. If you want to do something different, see the documentation of \code{addPermission}.
+
+With an \aRTconn\ object, you can also see the databases available and remove them.
+The next example shows the databases and tries to remove a database called \code{bodmin}
+if it exists:
+
+<<label="Showing databases", keep.source=TRUE>>=
+showDbs(con)
+if( any(showDbs(con) =="bodmin") ) deleteDb(con, "bodmin", 
+  force=TRUE)
+@
+
+\subsection{\aRTdb\ class}
+
+To create a new database, or to access one, there is the \aRTdb\ class.
+One object from this class stores a \emph{real} database connection, and we
+need an \aRTconn\ object to create it:
+
+<<label="Creating new database">>=
+db <- createDb(con, db="bodmin")
+db
+@
+
+This constructor fails if the database already exists. 
+Once this object is created, it depends no more on the \code{con} object.
+
+A \aRTdb\ object contains \emph{all} TerraLib objects in memory needed
+by \aRT. This means
+that all objects opened from this one depends on it, even after they are created
+in \R. If this object is removed from \R, all his ``childrens'' become invalid objects
+when \R's garbage collector remove this object from memory.
+
+\subsection{\aRTlayer\ class}
+
+To work with data in aRT, we need to manipulate \emph{layers}. A layer can
+store any geometry of one kind (points, lines, polygons, raster and cells), 
+and attributes. Layers are TerraLib abstrations
+that use tables of data and tables of control in one database. So they can
+be created from \aRTdb\ objects. 
+
+<<label="Creating a new layer">>=
+layer.points <- createLayer(db, "points")
+layer.points
+@
+
+To insert data in the layer, we will use the bodmin dataset, available within
+\pkg{splancs} package. We only need to remove the first point of bodmin polygon, because it is
+a repetition of the second point, and then TerraLib may interpret it as the end of a polygon with
+only one point.
+<<label="Splancs">>=
+require(splancs)
+data(bodmin)
+names(bodmin)
+bodmin$poly = bodmin$poly[-1,]
+@
+
+Before insert into the database, we must convert the data to \aRT\ format,
+following sp classes. The next commands converts it to a \code{SpatialPointsDataFrame}
+and inserts it into the database: 
+
+<<label="Adding points", keep.source=TRUE>>=
+SPoints = SpatialPointsDataFrame(cbind(bodmin$x, bodmin$y),
+  data.frame(ID=paste(1:length(bodmin$x))))
+addPoints(layer.points, SPoints)
+t = createTable(layer.points, "tpoints")
+layer.points
+@
+
+To insert the evolving polygon, we will create another layer:
+
+<<label="Adding polygons">>=
+p = Polygon(bodmin$poly)
+P = Polygons(list(p), ID="1")
+SP = SpatialPolygons(list(P))
+layer.pol <- createLayer(db, l="polygons")
+addPolygons(layer.pol, SP)
+t = createTable(layer.pol, "tpol")
+@
+
+Finally we will do a kernel analysis, and insert the raster data into the database, in
+another layer:
+
+<<label="Adding raster", keep.source=TRUE>>=
+raster <- kernel2d(as.points(bodmin), bodmin$poly, h0=2, 
+  nx=100, ny=200)
+
+## converting the kernel to "sp"
+g <- cbind(expand.grid(x = raster$x, y = raster$y), as.vector(raster$z))
+coordinates(g) <- c("x", "y")
+gridded(g) <- TRUE
+fullgrid(g)=TRUE
+
+layer.raster <- createLayer(db, l="raster")
+addRaster(layer.raster, g)
+@
+
+Finally, there are three layers in the database, and they can be seen
+in the next code:
+
+<<label="Show layers">>=
+showLayers(db)
+db
+@
+
+To get the layer's geometry call \code{getGeometry}, and then you
+can plot it. But if you don't need the data the layer can be
+plotted directly:
+
+<<plotPoints,eval=F>>=
+plot(layer.raster)
+plot(layer.points,add=TRUE)
+pols = getPolygons(layer.pol)
+plot(pols, add=TRUE)
+@
+
+\setkeys{Gin}{width=0.7\textwidth}
+\begin{figure} \begin{center}
+\label{fig:surv}
+<<echo=F, fig=T>>=
+<<plotPoints>>
+@
+\caption{Data from the three layers}
+\end{center} \end{figure}
+
+\subsection{\aRTtheme\ class}
+
+The last class implemented in \aRT\ is \aRTtheme. Themes can be visualized
+in TerraView software, and they can select data and join tables. For now, we 
+will only create themes of points and polygons, and put them in the
+view \code{view}:
+
+<<Themes>>=
+theme.points<-createTheme(layer.points, "points", view="view")
+setVisual(theme.points, visualPoints(size=5))
+theme.pol<-createTheme(layer.pol, "polygons", view="view")
+setVisual(theme.pol, visualPolygons())
+@
+
+There is an argument that can be used in raster themes: the colors configuration.
+It can be used as in the next example.
+
+<<ThemeRaster>>=
+theme.raster<-createTheme(layer.raster, "raster", v="view")
+setVisual(theme.raster, visualRaster(col = terrain.colors(20)), mode="raster")
+@
+
+\bibliographystyle{plain}
+\bibliography{bibli}
+
+\end{document}
+% vim: syntax=tex

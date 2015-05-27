@@ -1,0 +1,170 @@
+#  aRT : API R - TerraLib                                                
+#  Copyright (C) 2003-2011  LEG                                          
+#                                                                        
+#  This program is free software; you can redistribute it and/or modify  
+#  it under the terms of the GNU General Public License as published by  
+#  the Free Software Foundation; either version 2 of the License, or     
+#  (at your option) any later version.                                   
+#                                                                        
+#  This program is distributed in the hope that it will be useful,       
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of        
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         
+#  GNU General Public License for more details.                          
+#                                                                        
+#  You should have received a copy of the GNU Lesser General Public      
+#  License along with this library.
+
+# aRT.R: calls C++ functions of main.cpp.
+# All this functions only check for user argument errors.
+# Other errors are checked in the next layers.
+
+.getConfig = function(file, key)
+{
+    data = readLines(file)
+    key=paste("[", key, "]", sep="")
+
+    i = 1
+    while(data[i] != key && i <= length(data))
+    {
+        i = i + 1
+    }
+    if(i > length(data))
+	{
+		if(key == "[default]") return (NULL)
+        stop(paste("Could not find [default] in", file))
+	}
+    i = i + 1
+
+    result = list()
+    while(substr(data[i],1,1) != "[" && i <= length(data))
+    {
+        d = unlist(strsplit(data[i], "\\="))
+        result[[d[1]]] = d[2]
+
+        i = i + 1
+	}
+    return(result)
+}
+
+setMethod("initialize", "aRTconn", function(.Object,
+                                            user = system("echo $USER", TRUE),
+									        password = "",
+										    port = NULL,
+										    host = "",
+										    dbms = NULL,
+										    name = NULL)
+{
+	if(!is.null(name))
+	{
+		system("touch ~/.aRTrc")
+		conf = .getConfig("~/.aRTrc", name)
+
+		if(!is.null(conf))
+		{
+			for(i in 1:(length(conf)))
+			{
+				t = names(conf[i])
+				d = conf[[i]]
+	
+				if(t == "user")
+				{
+					user = d
+					.catSilent("Using '~/.aRTrc' item for slot 'user'\n", sep="")
+				}
+				else if(t == "password")
+				{
+					password = d
+					.catSilent("Using '~/.aRTrc' item for slot 'password'\n", sep="")
+				}
+				else if(t == "port")
+				{
+					port = as.integer(d)
+					.catSilent("Using '~/.aRTrc' item for slot 'port'\n", sep="")
+				}
+				else if(t == "host")
+				{
+					host = d
+					.catSilent("Using '~/.aRTrc' item for slot 'host'\n", sep="")
+				}
+				else if(t == "dbms")
+				{
+					dbms = d
+					.catSilent("Using '~/.aRTrc' item for slot 'dbms'\n", sep="")
+				}
+			}
+		}
+		else stop("Config '~/.aRTrc' file not found!\n")
+	}
+
+	if( missing(port) ) { port = 0  }
+	if( missing(dbms) ) { dbms = "" }
+
+	.Object@pointer <- .Call("cppNewaRT", user, password, port, host, dbms, PACKAGE="aRT")
+	reg.finalizer(.Object@pointer, .aRTremove)
+	.Object
+})
+
+openConn = function(...) {
+	if(length(c(...)) == 0) return (new("aRTconn", ...))
+
+	new("aRTconn", ...)
+}
+
+setMethod("openDb", "aRTconn", function(object, dbname, update=FALSE, views="") {
+	sd = showDbs(object)
+	if(length(sd) != 0 && !any(showDbs(object) == dbname)) # sqlite returns an empty sd
+		stop("Database does not exist\n")
+	new("aRTdb", object, dbname=dbname, update=update, views=views)
+})
+
+setMethod("createDb", "aRTconn", function(object, dbname, replace=FALSE) {
+	if(any(showDbs(object) == dbname))
+    {
+		if(replace) deleteDb(object, dbname, force=TRUE)
+		else stop("Database already exists\n")
+    }
+	new("aRTdb", object, dbname=dbname, create=TRUE)
+})
+
+setMethod("getPermissions", "aRTconn", function(object, user="", global=TRUE) {
+	.aRTcall(object, "cppGetPermissions", user=user, global=global)
+})
+
+setMethod("dropUser", "aRTconn", function(object, user, remote=FALSE, host="") {
+	.aRTcall(object, "cppDropUser", user=user, remote=as(remote, "integer"), host=host)
+	return (invisible())
+})
+
+setMethod("addPermission", "aRTconn", function(object, user, pass="", remote=FALSE, host="", privilege=c("all", "select", "insert", "create", "update"), db="*") {
+	privilege=match.arg(privilege)
+	.aRTcall(object, "cppAddPermission", user=user, pass=pass, remote=as(remote, "integer"), host=host, database=db, privilege=privilege)
+	return (invisible())
+})
+
+setMethod("showDbs", "aRTconn",  function(object) { .aRTcall(object, "cppList")       })
+
+setMethod("deleteDb", "aRTconn", function(object, dbname, force=FALSE) {
+	.catSilent("Checking for database \'", dbname, "\' ... ", sep="")
+	if(! any(showDbs(object) == dbname) )
+	{
+		.catSilent("no\n")
+		warning(sprintf("Database '%s' does not exist.", dbname))
+		return(invisible())
+	}
+	.catSilent("yes\n")
+
+	if(.aRTconfirm(force))
+		.aRTcall(object, "cppDeleteDb", dbname=dbname)
+	return(invisible())
+})
+
+aRTinstallreport = function()
+{
+    cat("\naRT INSTALLATION REPORT\n\n")
+    v = aRTversion()
+    cat(paste("aRT version:     \t",     v$aRT, "\n", sep=""))
+    cat(paste("TerraLib version:\t",v$TerraLib, "\n", sep=""))
+
+	cat("Installation date: \tTue Jan  7 17:46:05 BRST 2014\nInstallation user: \tpedro\nTerraLib dir:    \t\n\n")
+}
+

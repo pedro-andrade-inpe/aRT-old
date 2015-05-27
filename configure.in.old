@@ -1,0 +1,253 @@
+#  aRT: R-TerraLib API
+#  Copyright (C) 2003-2011  LEG                                          
+#                                                                        
+#  This program is free software; you can redistribute it and/or modify  
+#  it under the terms of the GNU General Public License as published by  
+#  the Free Software Foundation; either version 2 of the License, or     
+#  (at your option) any later version.                                   
+#                                                                        
+#  This program is distributed in the hope that it will be useful,       
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of        
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         
+#  GNU General Public License for more details.                          
+#                                                                        
+#  You should have received a copy of the GNU Lesser General Public      
+#  License along with this library.
+
+AC_INIT(aRT, 1.8-0, pedro.andrade@inpe.br)
+
+AC_PROG_CC
+AC_PROG_CPP
+
+# can we find MySQL in the system directories? (users may still want/need
+# to use another version/installation)
+#
+#AC_CHECK_LIB(mysqlclient, mysql_init,
+#             HAVE_MYSQL_LIB="yes", 
+#             HAVE_MYSQL_LIB="")
+
+#AC_CHECK_HEADERS(mysql.h, 
+#             HAVE_MYSQL_INC="yes", 
+#             HAVE_MYSQL_INC="")
+
+#
+# the user may still want a particular MySQL/TerraLib installation/version
+# (possibly overriding system directories). Note that we don't clobber the
+# shell variables MYSQL_DIR, MSYQL_INC, MYSQL_LIB, TERRALIB_DIR that may be
+# inherited from the global shell environement.
+#
+AC_ARG_WITH(mysql-dir,
+            [--with-mysql-dir=MYSQL_DIR      specifies an existing MySQL base dir],
+            MYSQL_DIR="${with_mysql_dir}")
+AC_ARG_WITH(mysql-inc, 
+            [--with-mysql-inc=MYSQL_INC      specifies an existing MySQL include dir],
+            MYSQL_INC="${with_mysql_inc}")
+AC_ARG_WITH(mysql-lib,
+            [--with-mysql-lib=MYSQL_LIB      specifies an existing MySQL lib dir],
+            MYSQL_LIB="${with_mysql_lib}")
+AC_ARG_WITH(terralib,
+            [--with-terralib=TERRALIB_DIR    specifies an existing TerraLib dir],
+			TERRALIB_DIR="${with_terralib}")
+
+if test -n "${MYSQL_DIR}" ; then
+   test ! -d "${MYSQL_DIR}" && AC_MSG_ERROR([dir ${MYSQL_DIR} does not exist])
+   test -z "${MYSQL_INC}" -a -d "${MYSQL_DIR}/include/mysql"  && \
+              MYSQL_INC="${MYSQL_DIR}/include/mysql"
+   test -z "${MYSQL_LIB}" -a -d "${MYSQL_DIR}/lib/mysql" && \
+              MYSQL_LIB="${MYSQL_DIR}/lib/mysql"
+fi
+
+#if test -n "${TERRALIB_DIR}"; then
+#	test ! -d "${TERRALIB_DIR}" && AC_MSG_ERROR([dir ${TERRALIB_DIR} does not exist])
+#fi
+
+# 
+# We now determine whether we found the lib and header files (we still
+# need to check PKG_*, in case the user only defined one them)
+#
+if test -z "${PKG_LIBS}" ; then
+   if test -n "${MYSQL_LIB}" ;  then
+      # use the one specified in --with-mysql-*
+      PKG_LIBS="-lte_mysql"
+      ART_LOG="${ART_LOG}MySQL lib:       \t${MYSQL_LIB}\n"
+   else
+      # use the one in the system dirs (if there's one)
+      test -n "${HAVE_MYSQL_LIB}" && PKG_LIBS="-lte_mysql"
+   fi
+fi
+
+ART_LOG=` date`
+ART_LOG="Installation date: \t${ART_LOG}\n"
+X_Y=`whoami`
+ART_LOG="${ART_LOG}Installation user: \t${X_Y}\n"
+
+if test -z "${PKG_CPPFLAGS}" ; then
+   if test -n "${MYSQL_INC}" ; then
+      # use the one specified in --with-mysql-inc=DIR
+      ART_LOG="${ART_LOG}MySQL include:   \t${MYSQL_INC}\n"
+      PKG_CPPFLAGS="-I${MYSQL_INC}" 
+      FOUND_INC="yes"
+   else
+      if test -n "${HAVE_MYSQL_INC}" ; then
+         # use the one in the system dirs 
+         PKG_CPPFLAGS="" 
+         FOUND_INC="yes"
+      else
+         PKG_CPPFLAGS=""  
+         FOUND_INC="no"   
+      fi
+   fi
+fi
+
+if test "${HAVE_GETOPT_LONG}" = "no" ; then
+   PKG_CPPFLAGS="${PKG_CPPFLAGS} -DHAVE_GETOPT_LONG=0 "
+fi
+
+FOUND_TL="yes"
+
+# if not defined TERRALIB_DIR, search in /usr/local
+if test -z ${TERRALIB_DIR} ; then
+	candidate="/usr/local/"
+else
+	candidate="${TERRALIB_DIR}"
+fi
+
+for file in libterralib.so libterralib_shp.so
+do
+	AC_CHECK_FILE("${candidate}/lib/${file}", , FOUND_TL="no")
+	if test "${FOUND_TL}" = "no"; then
+		echo "::${candidate}/lib/${file} not found. Try download and compile terraLib first."
+		exit 1
+	fi
+done
+TERRALIB_DIR="${candidate}"
+ART_LOG="${ART_LOG}TerraLib dir:    \t${candidate}\n"
+
+PKG_LIBS=""
+
+# if above fails, do a more exhaustive search into potential mysql
+# subdirectories of the system directories.
+#if test -z "${HAVE_MYSQL_LIB}" -a -z "${PKG_LIBS}" ; then
+   for dir in /usr/local/lib /usr/lib /usr/local/mysql/lib /opt/lib /lib
+   do  # need to release mysqlcient from cache
+       unset ac_cv_lib_mysqlclient_mysql_init
+       candidate="${dir}/libmysqlclient.a"
+       AC_CHECK_FILE(${candidate},
+                    HAVE_MYSQL_LIB="${dir}",
+                    HAVE_MYSQL_LIB="")
+       if test -n "${HAVE_MYSQL_LIB}" ; then
+          echo "::libmysqlclient.a found in ${HAVE_MYSQL_LIB}"
+          PKG_LIBS="${PKG_LIBS} -lte_mysql"
+          ART_LOG="${ART_LOG}MySQL lib:        \t${dir}\n"
+          break
+       fi
+   done
+#fi
+
+# if above fails, do a more exhaustive search into potential mysql
+# subdirectories of the system directories.
+#if test -z "${HAVE_PG_LIB}" -a -z "${PKG_LIBS}" ; then
+   for dir in /usr/local/lib /usr/lib /usr/lib/postgresql/lib /opt/lib /lib
+   do  # need to release mysqlcient from cache
+       unset ac_cv_lib_mysqlclient_mysql_init
+       candidate="${dir}/libpq.a"
+       AC_CHECK_FILE(${candidate},
+                    HAVE_PG_LIB="${dir}",
+                    HAVE_PG_LIB="")
+       if test -n "${HAVE_PG_LIB}" ; then
+          echo "::libpq.a found in ${HAVE_PG_LIB}"
+          PKG_LIBS="${PKG_LIBS} -L${HAVE_PG_LIB} -lte_postgresql"
+          ART_LOG="${ART_LOG}Postgre lib:     \t${dir}\n"
+          break
+       fi
+   done
+#fi
+
+PKG_CPPFLAGS="${PKG_CPPFLAGS}"
+TARGET_DBMS_OBJS=""
+HAVE_MYSQL=FALSE
+HAVE_POSTGRE=FALSE
+HAVE_SQLITE=FALSE
+HAVE_64_BITS=FALSE
+
+UN=`uname -m`
+if test "${UN}" = "x86_64"; then
+	echo "::system is a 64 bits architecture"
+	HAVE_64_BITS=TRUE
+else
+	echo "::system is a 32 bits architecture"
+fi
+
+# ditto for the header files
+if test -z "${HAVE_MYSQL_INC}" ; then
+   for dir in /usr/local/include /usr/include /usr/include/mysql /usr/local/mysql/include \
+              /opt/include /include
+   do 
+       candidate="${dir}"
+       AC_CHECK_HEADER(${candidate}/mysql.h,
+                    HAVE_MYSQL_INC="${candidate}",
+                    HAVE_MYSQL_INC="")
+       if test -n "${HAVE_MYSQL_INC}" ; then
+          PKG_CPPFLAGS="${PKG_CPPFLAGS} -DHAVE_MYSQL -I${TERRALIB_DIR}/src/terralib/drivers/MySQL -I${HAVE_MYSQL_INC}"
+		  HAVE_MYSQL=TRUE
+		  FOUND_INC="yes"
+          ART_LOG="${ART_LOG}MySQL include:  \t${dir}\n"
+          break
+       fi
+   done
+fi
+
+# ditto for the header files for postgres
+#if test -z "${HAVE_MYSQL_INC}" -a -z "${PKG_CPPFLAGS}" ; then
+   for dir in /usr/local/include /usr/include /usr/include/postgresql /usr/local/postgresql/include \
+              /opt/include /include
+   do 
+       candidate="${dir}"
+       AC_CHECK_HEADER(${candidate}/libpq-fe.h,
+                    HAVE_PG_INC="${candidate}",
+                    HAVE_PG_INC="")
+       if test -n "${HAVE_PG_INC}" ; then
+          PKG_CPPFLAGS="${PKG_CPPFLAGS} -DHAVE_POSTGRE -I${TERRALIB_DIR}/src/terralib/drivers/PostgreSQL -I${HAVE_PG_INC}"
+		  HAVE_POSTGRE=TRUE
+		  #TARGET_DBMS_OBJS="${TARGET_DBMS_OBJS} TePGInterface.o TePGUtils.o TePostgreSQL.o TePostGIS.o"
+		  FOUND_INC="yes"
+          ART_LOG="${ART_LOG}Postgre include:\t${dir}\n"
+          break
+       fi
+   done
+#fi
+
+# If we still haven't set PKG_*, error
+if test "${FOUND_INC}" = "no" -o -z "${PKG_LIBS}" ; then
+   echo ""
+   echo "Configuration error:"
+   echo "  could not find the MySQL installation include and/or library"
+   echo "  directories.  Manually specify the location of the MySQL"
+   echo "  libraries and the header files and re-run R CMD INSTALL."
+   echo ""
+   exit 1
+fi
+
+# TODO: erro caso nao encontre qualquer sgbd
+# passar as variaveis para o makefile -DHAVE_... OBJS
+
+AC_SUBST(ART_LOG)
+AC_SUBST(PKG_CPPFLAGS)
+AC_SUBST(PKG_LIBS)
+AC_SUBST(TERRALIB_DIR)
+AC_SUBST(TARGET_DBMS_OBJS)
+AC_SUBST(HAVE_MYSQL)
+AC_SUBST(HAVE_POSTGRE)
+AC_SUBST(HAVE_SQLITE)
+AC_SUBST(HAVE_64_BITS)
+
+echo "========================"
+echo $PKG_CPPFLAGS
+echo "========================"
+
+AC_OUTPUT([R/aRTconn.R])
+AC_OUTPUT([R/aRTtable.R])
+AC_OUTPUT([R/zzz.R])
+AC_OUTPUT(src/Makefile)
+AC_OUTPUT(src/Makevars)
+
