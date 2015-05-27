@@ -1,4 +1,7 @@
 
+- Migrar para TerraLib 5.0
+- Colocar o TODO como issues do github
+
 - versao windows (em andamento , Pedro)
  - voltar a fazer a cross compilacao funcionar
  - drivers para outros bancos
